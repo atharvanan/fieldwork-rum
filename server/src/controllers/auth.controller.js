@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
@@ -19,7 +20,13 @@ const loginSchema = z.object({ email: z.string().trim().toLowerCase().email(), p
 // Constant-time dummy comparison to mitigate account enumeration via timing attacks
 const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 12);
 
-const publicUser = (u) => ({ id: String(u._id), name: u.name, email: u.email, role: u.role });
+const publicUser = (u) => ({
+  id: String(u._id),
+  name: u.name,
+  email: u.email,
+  role: u.role,
+  avatarUrl: u.avatarUrl,
+});
 
 async function startSession(res, user) {
   const access = signAccess(user);
@@ -91,3 +98,112 @@ export const me = asyncHandler(async (req, res) => {
   if (!user) throw new AppError(401, 'Sign in to continue');
   res.json({ user: publicUser(user) });
 });
+
+/**
+ * Initiates the Google OAuth 2.0 authorization code flow.
+ */
+export const googleAuth = (req, res) => {
+  if (!env.googleClientId || !env.googleClientSecret) {
+    return res.redirect(`${env.clientOrigin}/login?error=Google+OAuth+not+configured`);
+  }
+
+  const state = crypto.randomBytes(32).toString('hex');
+  res.cookie('rum_oauth_state', state, {
+    httpOnly: true,
+    secure: env.isProd,
+    sameSite: 'lax',
+    maxAge: 10 * 60 * 1000,
+  });
+
+  const params = new URLSearchParams({
+    client_id: env.googleClientId,
+    redirect_uri: env.googleCallbackUrl,
+    response_type: 'code',
+    scope: 'openid email profile',
+    state,
+    access_type: 'online',
+    prompt: 'select_account',
+  });
+
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+};
+
+/**
+ * Google OAuth 2.0 callback handler.
+ * Exchanges authorization code for tokens, retrieves user profile, links or provisions
+ * user record, establishes session cookies, and redirects to dashboard.
+ */
+export const googleCallback = asyncHandler(async (req, res) => {
+  const { code, state, error } = req.query;
+  const storedState = req.cookies?.rum_oauth_state;
+  res.clearCookie('rum_oauth_state', { httpOnly: true, secure: env.isProd, sameSite: 'lax' });
+
+  if (error || !code) {
+    return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent(error || 'Authentication cancelled')}`);
+  }
+
+  if (!state || !storedState || state !== storedState) {
+    return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent('Invalid OAuth state. Please try again.')}`);
+  }
+
+  // Exchange authorization code for access and ID tokens
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code: String(code),
+      client_id: env.googleClientId,
+      client_secret: env.googleClientSecret,
+      redirect_uri: env.googleCallbackUrl,
+      grant_type: 'authorization_code',
+    }),
+  });
+
+  if (!tokenResponse.ok) {
+    const errorBody = await tokenResponse.text();
+    console.error('[auth] Google token exchange failed:', errorBody);
+    return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent('Failed to exchange Google token')}`);
+  }
+
+  const tokenData = await tokenResponse.json();
+  const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: `Bearer ${tokenData.access_token}` },
+  });
+
+  if (!profileResponse.ok) {
+    return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent('Failed to retrieve Google profile')}`);
+  }
+
+  const profile = await profileResponse.json();
+  if (!profile.email) {
+    return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent('Google account has no associated email')}`);
+  }
+
+  const email = profile.email.toLowerCase();
+  let user = await User.findOne({ $or: [{ googleId: profile.sub }, { email }] });
+
+  if (user) {
+    let modified = false;
+    if (!user.googleId) {
+      user.googleId = profile.sub;
+      modified = true;
+    }
+    if (!user.avatarUrl && profile.picture) {
+      user.avatarUrl = profile.picture;
+      modified = true;
+    }
+    if (modified) await user.save();
+  } else {
+    user = await User.create({
+      name: profile.name || email.split('@')[0],
+      email,
+      googleId: profile.sub,
+      avatarUrl: profile.picture,
+      role: env.adminEmail && email === env.adminEmail ? 'admin' : 'developer',
+    });
+  }
+
+  await startSession(res, user);
+  res.redirect(`${env.clientOrigin}/dashboard`);
+});
+

@@ -20,4 +20,7 @@ export const env = {
   ingestRatePerMin: Number(process.env.INGEST_RATE_PER_MIN) || 600,
   registerRatePerHour: Number(process.env.REGISTER_RATE_PER_HOUR) || 20,
   retentionDays: Number(process.env.RETENTION_DAYS) || 30,
+  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+  googleCallbackUrl: process.env.GOOGLE_CALLBACK_URL || `${process.env.CLIENT_ORIGIN || 'http://localhost:3000'}/api/auth/google/callback`,
 };

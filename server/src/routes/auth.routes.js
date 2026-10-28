@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { env } from '../config/env.js';
-import { register, login, refresh, logout, me } from '../controllers/auth.controller.js';
+import { register, login, refresh, logout, me, googleAuth, googleCallback } from '../controllers/auth.controller.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const tooMany = { error: 'Too many attempts. Try again in a few minutes.' };
@@ -30,4 +30,8 @@ router.post('/login', loginLimiter, login);
 router.post('/refresh', refresh);
 router.post('/logout', logout);
 router.get('/me', requireAuth, me);
+
+router.get('/google', googleAuth);
+router.get('/google/callback', googleCallback);
+
 export default router;

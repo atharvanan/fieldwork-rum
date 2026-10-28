@@ -177,6 +177,9 @@ Access the dashboard at `http://localhost:3000`.
 | `ADMIN_EMAIL` | Email automatically assigned admin privileges on signup | Optional |
 | `RETENTION_DAYS` | TTL duration for raw telemetry events | `30` |
 | `INGEST_RATE_PER_MIN` | Per-project-key ingestion rate limit threshold | `1200` |
+| `GOOGLE_CLIENT_ID` | Google OAuth 2.0 Client ID | Optional |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth 2.0 Client Secret | Optional |
+| `GOOGLE_CALLBACK_URL` | OAuth redirect URI (e.g. `http://localhost:3000/api/auth/google/callback`) | `${CLIENT_ORIGIN}/api/auth/google/callback` |
 
 ---
 
