@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { background: #F1F3EE; color: #12303B; }
+  body { @apply font-sans antialiased; font-size: 15px; line-height: 1.55; }
+  h1, h2, h3 { @apply font-display; letter-spacing: -0.01em; }
+  :focus-visible { outline: 2px solid #2438C9; outline-offset: 2px; }
+  ::selection { background: #12303B; color: #F1F3EE; }
+}
+
+@layer components {
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded border px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50; }
+  .btn-primary { @apply btn border-ink bg-ink text-paper hover:bg-[#1B4352]; }
+  .btn-quiet { @apply btn border-rule bg-transparent text-ink hover:border-ink; }
+  .btn-danger { @apply btn border-poor bg-transparent text-poor hover:bg-poor hover:text-paper; }
+  .field { @apply w-full rounded border border-rule bg-panel px-3 py-2 text-ink placeholder:text-muted/70; }
+  .label { @apply mb-1 block text-sm font-medium; }
+  .num { font-variant-numeric: tabular-nums; }
+}

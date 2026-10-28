@@ -1,0 +1,15 @@
+{
+  "name": "fieldwork-sdk",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/sdk.test.mjs",
+    "test:pipeline": "node test/pipeline.e2e.mjs",
+    "build": "esbuild src/auto.js --bundle --minify --format=iife --target=es2018 --outfile=dist/rum.min.js && esbuild src/index.js --bundle --minify --format=esm --target=es2018 --outfile=dist/rum.esm.js && node scripts/size.js && node scripts/copy.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "jsdom": "^30.1.3"
+  }
+}

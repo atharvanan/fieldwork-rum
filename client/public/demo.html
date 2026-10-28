@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fieldwork demo page</title>
+<style>
+  body { font: 16px/1.55 "Segoe UI", system-ui, sans-serif; background: #F1F3EE; color: #12303B; max-width: 38rem; margin: 3rem auto; padding: 0 1.25rem; }
+  h1 { font-family: "Iowan Old Style", Palatino, Georgia, serif; font-weight: 500; }
+  button, input { font: inherit; padding: .5rem .9rem; border: 1px solid #C8D0C9; border-radius: 4px; background: #F8F9F6; color: inherit; }
+  button { cursor: pointer; margin: 0 .5rem .5rem 0; }
+  button:hover { border-color: #12303B; }
+  #log { margin-top: 1rem; padding: .75rem; border: 1px solid #C8D0C9; border-radius: 4px; min-height: 3rem; font-size: .9rem; }
+  .shift { background: #C8D0C9; padding: 1rem; margin: 1rem 0; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h1>Fieldwork demo page</h1>
+<p>This page loads the Fieldwork script with your site key. Use the buttons to produce real events, then switch tabs or close this page. Vitals are sent when the page is hidden.</p>
+
+<form id="keyform" hidden>
+  <label for="key">Paste your site key</label><br>
+  <input id="key" size="36" placeholder="rum_...">
+  <button>Start</button>
+</form>
+
+<div id="controls" hidden>
+  <button id="err">Throw an error</button>
+  <button id="promise">Reject a promise</button>
+  <button id="shift">Cause a layout shift</button>
+  <button id="slow">Slow click (blocks 400 ms)</button>
+  <button id="route">Change route</button>
+</div>
+<div id="slot"></div>
+<div id="log" aria-live="polite">Waiting for a site key.</div>
+
+<script>
+  var key = new URLSearchParams(location.search).get('key');
+  var log = function (t) { document.getElementById('log').textContent = t; };
+  if (!key) {
+    document.getElementById('keyform').hidden = false;
+    document.getElementById('keyform').onsubmit = function (e) {
+      e.preventDefault();
+      location.search = '?key=' + encodeURIComponent(document.getElementById('key').value.trim());
+    };
+  } else {
+    var s = document.createElement('script');
+    s.src = '/rum.min.js';
+    s.dataset.key = key;
+    s.dataset.release = 'demo-1.0';
+    document.head.appendChild(s);
+    document.getElementById('controls').hidden = false;
+    log('Fieldwork is running. Try the buttons.');
+
+    document.getElementById('err').onclick = function () {
+      setTimeout(function () { null.boom(); }, 0);
+      log('Threw a TypeError. It will be reported in a few seconds.');
+    };
+    document.getElementById('promise').onclick = function () {
+      Promise.reject(new Error('Demo promise rejection'));
+      log('Rejected a promise without a handler.');
+    };
+    document.getElementById('shift').onclick = function () {
+      // Browsers ignore layout shifts that happen right after a click (they count as expected),
+      // so wait a moment to make this one count towards the layout stability score.
+      log('The layout will shift in one second.');
+      setTimeout(function () {
+        var d = document.createElement('div');
+        d.className = 'shift';
+        d.style.height = '120px';
+        d.textContent = 'This block pushed the content below it down.';
+        var slot = document.getElementById('slot');
+        slot.insertBefore(d, slot.firstChild);
+        log('Inserted a block above the page content (layout shift).');
+      }, 1000);
+    };
+    document.getElementById('slow').onclick = function () {
+      var end = Date.now() + 400;
+      while (Date.now() < end) {}
+      log('Blocked the main thread for 400 ms. This shows up as a slow interaction.');
+    };
+    document.getElementById('route').onclick = function () {
+      history.pushState({}, '', '/demo-page-' + Math.floor(Math.random() * 100));
+      log('Changed the URL without a reload. Recorded as a new page view.');
+    };
+  }
+</script>
+</body>
+</html>
