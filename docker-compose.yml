@@ -13,12 +13,17 @@ services:
 
   server:
     build: ./server
+    env_file:
+      - ./server/.env
     environment:
       MONGO_URI: mongodb://mongo:27017/fieldwork
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-only-access-secret-change-me}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-only-refresh-secret-change-me}
       CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost:3000}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:-http://localhost:3000/api/auth/google/callback}
     depends_on:
       mongo:
         condition: service_healthy
