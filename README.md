@@ -76,6 +76,16 @@ Built as a decoupled, multi-tiered architecture featuring a dependency-free brow
 - **Dual JWT Token Rotation**: 15-minute access token and 7-day refresh token stored in `httpOnly`, `sameSite: lax` cookies.
 - **Token Family Reuse Detection**: Refresh tokens are stored as cryptographic hashes (`sha256`). When a token is refreshed, it is immediately revoked and replaced. If a previously consumed token is presented (indicating a replay attempt), all sessions for that user family are instantly purged.
 - **Timing Attack Mitigation**: Login verification employs constant-time dummy comparisons (`bcrypt.compare` against pre-computed salt) when an unknown email address is supplied, neutralizing user enumeration.
+- **Google OAuth 2.0 Integration**: Cryptographically secured CSRF state token with server-to-server token exchange and automatic user provisioning.
+
+### 4. WCAG 2.1 / 2.2 Accessibility Assessment Engine
+- **Multi-Level Compliance Auditing**: Evaluates target pages against WCAG Conformance Levels A, AA (legal baseline for ADA & EAA), and AAA.
+- **Rule Suites**:
+  - **Perceivable**: Image alternative text (`image-alt`), relative luminance and color contrast ratios (`color-contrast` at 4.5:1 for AA and 7:1 for AAA), text resizing / viewport zoom lock (`meta-viewport`).
+  - **Operable**: Button accessible names, ambiguous link purpose, positive `tabindex` avoidance, keyboard navigation landmarks (`landmark-one-main`).
+  - **Understandable**: Language attribute validation (`html-has-lang`), form control label associations (`label[for]`, `aria-label`).
+  - **Robust**: Document title (`<title>`), heading hierarchy sequencing without skips (`h1` -> `h2`), and duplicate DOM ID prevention.
+- **Actionable Remediation**: Reports include weighted compliance scores (0-100), severity impact tags (Critical, Serious, Moderate, Minor), exact CSS selectors, failing HTML snippets, and direct links to W3C guidance.
 
 ---
 

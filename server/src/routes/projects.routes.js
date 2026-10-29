@@ -3,6 +3,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { loadProject } from '../middleware/project.js';
 import * as p from '../controllers/projects.controller.js';
 import * as s from '../controllers/stats.controller.js';
+import * as a from '../controllers/audit.controller.js';
 
 const router = Router();
 router.use(requireAuth);
@@ -20,4 +21,11 @@ router.get('/:id/stats/vitals', s.vitals);
 router.get('/:id/stats/timeseries', s.timeseries);
 router.get('/:id/stats/breakdown', s.breakdown);
 router.get('/:id/stats/errors', s.errors);
+
+// WCAG Accessibility Audit Endpoints
+router.post('/:id/audits', a.runAudit);
+router.get('/:id/audits', a.listAudits);
+router.get('/:id/audits/:auditId', a.getAudit);
+router.delete('/:id/audits/:auditId', a.deleteAudit);
+
 export default router;
