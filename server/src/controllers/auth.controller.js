@@ -60,8 +60,19 @@ export const register = asyncHandler(async (req, res) => {
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = loginSchema.parse(req.body);
   const user = await User.findOne({ email }).select('+passwordHash');
-  const ok = await bcrypt.compare(password, user ? user.passwordHash : DUMMY_HASH);
+
+  // Handle users who registered via Google OAuth and have no local password
+  if (user && !user.passwordHash) {
+    throw new AppError(
+      400,
+      'This account was created with Google. Please click "Continue with Google" to sign in.'
+    );
+  }
+
+  const hash = user?.passwordHash || DUMMY_HASH;
+  const ok = await bcrypt.compare(password, hash);
   if (!user || !ok) throw new AppError(401, 'Email or password is incorrect');
+
   await startSession(res, user);
   res.json({ user: publicUser(user) });
 });
@@ -161,81 +172,94 @@ export const googleAuth = (req, res) => {
  * user record, establishes session cookies, and redirects to dashboard.
  */
 export const googleCallback = asyncHandler(async (req, res) => {
-  const { code, state, error } = req.query;
-  const storedState = req.cookies?.rum_oauth_state;
-  const secureCookie = env.isProd && env.clientOrigin.startsWith('https://');
+  try {
+    const { code, state, error } = req.query;
+    const storedState = req.cookies?.rum_oauth_state;
+    const secureCookie = env.isProd && env.clientOrigin.startsWith('https://');
 
-  res.clearCookie('rum_oauth_state', { httpOnly: true, secure: secureCookie, sameSite: 'lax', path: '/' });
+    res.clearCookie('rum_oauth_state', { httpOnly: true, secure: secureCookie, sameSite: 'lax', path: '/' });
 
-  if (error || !code) {
-    return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent(error || 'Authentication cancelled')}`);
-  }
-
-  // Validate state against HMAC signature or stored state cookie to defend against CSRF
-  const isValidState = verifyOAuthState(state) || (state && storedState && state === storedState);
-  if (!isValidState) {
-    return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent('Invalid OAuth state. Please try again.')}`);
-  }
-
-  // Exchange authorization code for access and ID tokens
-  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      code: String(code),
-      client_id: env.googleClientId,
-      client_secret: env.googleClientSecret,
-      redirect_uri: env.googleCallbackUrl,
-      grant_type: 'authorization_code',
-    }),
-  });
-
-  if (!tokenResponse.ok) {
-    const errorBody = await tokenResponse.text();
-    console.error('[auth] Google token exchange failed:', errorBody);
-    return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent('Failed to exchange Google token')}`);
-  }
-
-  const tokenData = await tokenResponse.json();
-  const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-    headers: { Authorization: `Bearer ${tokenData.access_token}` },
-  });
-
-  if (!profileResponse.ok) {
-    return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent('Failed to retrieve Google profile')}`);
-  }
-
-  const profile = await profileResponse.json();
-  if (!profile.email) {
-    return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent('Google account has no associated email')}`);
-  }
-
-  const email = profile.email.toLowerCase();
-  let user = await User.findOne({ $or: [{ googleId: profile.sub }, { email }] });
-
-  if (user) {
-    let modified = false;
-    if (!user.googleId) {
-      user.googleId = profile.sub;
-      modified = true;
+    if (error || !code) {
+      return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent(error || 'Authentication cancelled')}`);
     }
-    if (!user.avatarUrl && profile.picture) {
-      user.avatarUrl = profile.picture;
-      modified = true;
+
+    // Validate state against HMAC signature or stored state cookie to defend against CSRF
+    const isValidState = verifyOAuthState(state) || (state && storedState && state === storedState);
+    if (!isValidState) {
+      return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent('Invalid OAuth state. Please try again.')}`);
     }
-    if (modified) await user.save();
-  } else {
-    user = await User.create({
-      name: profile.name || email.split('@')[0],
-      email,
-      googleId: profile.sub,
-      avatarUrl: profile.picture,
-      role: env.adminEmail && email === env.adminEmail ? 'admin' : 'developer',
+
+    // Exchange authorization code for access and ID tokens
+    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code: String(code),
+        client_id: env.googleClientId,
+        client_secret: env.googleClientSecret,
+        redirect_uri: env.googleCallbackUrl,
+        grant_type: 'authorization_code',
+      }),
     });
-  }
 
-  await startSession(res, user);
-  res.redirect(`${env.clientOrigin}/dashboard`);
+    if (!tokenResponse.ok) {
+      const errorBody = await tokenResponse.text();
+      console.error('[auth] Google token exchange failed:', errorBody);
+      return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent('Failed to exchange Google token')}`);
+    }
+
+    const tokenData = await tokenResponse.json();
+    const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+
+    if (!profileResponse.ok) {
+      return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent('Failed to retrieve Google profile')}`);
+    }
+
+    const profile = await profileResponse.json();
+    if (!profile.email) {
+      return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent('Google account has no associated email')}`);
+    }
+
+    const email = profile.email.toLowerCase();
+    const sub = profile.sub ? String(profile.sub) : undefined;
+    const findQuery = [{ email }];
+    if (sub) findQuery.push({ googleId: sub });
+
+    let user = await User.findOne({ $or: findQuery });
+
+    if (user) {
+      let modified = false;
+      if (!user.googleId && sub) {
+        user.googleId = sub;
+        modified = true;
+      }
+      if (!user.avatarUrl && profile.picture) {
+        user.avatarUrl = String(profile.picture).trim();
+        modified = true;
+      }
+      if (modified) await user.save();
+    } else {
+      user = await User.create({
+        name: (profile.name || email.split('@')[0] || 'User').trim().slice(0, 80),
+        email,
+        googleId: sub,
+        avatarUrl: profile.picture ? String(profile.picture).trim() : undefined,
+        role: env.adminEmail && email === env.adminEmail ? 'admin' : 'developer',
+      });
+    }
+
+    await startSession(res, user);
+    res.redirect(`${env.clientOrigin}/dashboard`);
+  } catch (err) {
+    console.error('[auth] Google OAuth callback exception:', err);
+    return res.redirect(
+      `${env.clientOrigin}/login?error=${encodeURIComponent(
+        'Google sign-in encountered an unexpected issue. Please try again.'
+      )}`
+    );
+  }
 });
 
 /**

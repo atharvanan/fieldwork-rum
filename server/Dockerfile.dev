@@ -6,3 +6,4 @@ COPY . .
 ENV NODE_ENV=development
 EXPOSE 4000
 CMD ["npm", "run", "dev"]
+
