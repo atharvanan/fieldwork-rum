@@ -88,3 +88,4 @@ test('User Model - validates creation with googleId without passwordHash', () =>
   assert.equal(err, undefined, 'User with googleId and no passwordHash should validate');
   assert.equal(user.role, 'developer');
 });
+
