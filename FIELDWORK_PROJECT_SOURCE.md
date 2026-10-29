@@ -196,3 +196,4 @@ Fieldwork is a unified, high-performance **Real User Monitoring (RUM) and WCAG C
    - Session tokens are stored in `httpOnly, sameSite: lax` cookies that cannot be read by JavaScript (immune to XSS theft). Refresh tokens are stored as SHA-256 hashes and rotated on every single use. If an old consumed token is replayed, the server terminates all sessions for that entire user family.
 4. **"How does your WCAG engine calculate color contrast?"**
    - It implements the W3C WCAG 2.1 relative luminance formula by applying sRGB gamma expansion to RGB values, calculating $(L_1 + 0.05) / (L_2 + 0.05)$, and validating whether normal text meets the 4.5:1 ratio for Level AA or 7.0:1 for Level AAA.
+

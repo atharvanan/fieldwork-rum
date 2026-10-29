@@ -205,7 +205,12 @@ export const googleCallback = asyncHandler(async (req, res) => {
     if (!tokenResponse.ok) {
       const errorBody = await tokenResponse.text();
       console.error('[auth] Google token exchange failed:', errorBody);
-      return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent('Failed to exchange Google token')}`);
+      let desc = 'Failed to exchange Google token';
+      try {
+        const parsed = JSON.parse(errorBody);
+        desc = parsed.error_description || parsed.error || desc;
+      } catch {}
+      return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent(desc)}`);
     }
 
     const tokenData = await tokenResponse.json();
@@ -214,6 +219,8 @@ export const googleCallback = asyncHandler(async (req, res) => {
     });
 
     if (!profileResponse.ok) {
+      const errorBody = await profileResponse.text();
+      console.error('[auth] Google profile retrieval failed:', errorBody);
       return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent('Failed to retrieve Google profile')}`);
     }
 
@@ -222,41 +229,67 @@ export const googleCallback = asyncHandler(async (req, res) => {
       return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent('Google account has no associated email')}`);
     }
 
-    const email = profile.email.toLowerCase();
-    const sub = profile.sub ? String(profile.sub) : undefined;
-    const findQuery = [{ email }];
-    if (sub) findQuery.push({ googleId: sub });
+    const email = profile.email.toLowerCase().trim();
+    const sub = profile.sub ? String(profile.sub).trim() : undefined;
 
-    let user = await User.findOne({ $or: findQuery });
+    // Search first by googleId (primary identifier), then fallback to email lookup
+    let user = null;
+    if (sub) {
+      user = await User.findOne({ googleId: sub });
+    }
+    if (!user) {
+      user = await User.findOne({ email });
+    }
 
     if (user) {
       let modified = false;
-      if (!user.googleId && sub) {
+      if (sub && user.googleId !== sub) {
         user.googleId = sub;
         modified = true;
       }
-      if (!user.avatarUrl && profile.picture) {
+      if (profile.picture && user.avatarUrl !== String(profile.picture).trim()) {
         user.avatarUrl = String(profile.picture).trim();
         modified = true;
       }
-      if (modified) await user.save();
+      if (modified) {
+        try {
+          await user.save();
+        } catch (saveErr) {
+          console.warn('[auth] Non-critical warning updating Google user metadata:', saveErr.message);
+        }
+      }
     } else {
-      user = await User.create({
-        name: (profile.name || email.split('@')[0] || 'User').trim().slice(0, 80),
-        email,
-        googleId: sub,
-        avatarUrl: profile.picture ? String(profile.picture).trim() : undefined,
-        role: env.adminEmail && email === env.adminEmail ? 'admin' : 'developer',
-      });
+      const displayName = (profile.name || email.split('@')[0] || 'User').trim().slice(0, 80);
+      try {
+        user = await User.create({
+          name: displayName,
+          email,
+          googleId: sub,
+          avatarUrl: profile.picture ? String(profile.picture).trim() : undefined,
+          role: env.adminEmail && email === env.adminEmail ? 'admin' : 'developer',
+        });
+      } catch (createErr) {
+        // Defend against race condition or duplicate key collision
+        if (createErr?.code === 11000) {
+          user = await User.findOne({ email });
+          if (!user && sub) {
+            user = await User.findOne({ googleId: sub });
+          }
+        }
+        if (!user) {
+          throw createErr;
+        }
+      }
     }
 
     await startSession(res, user);
     res.redirect(`${env.clientOrigin}/dashboard`);
   } catch (err) {
     console.error('[auth] Google OAuth callback exception:', err);
+    const detail = !env.isProd && err?.message ? `: ${err.message}` : '';
     return res.redirect(
       `${env.clientOrigin}/login?error=${encodeURIComponent(
-        'Google sign-in encountered an unexpected issue. Please try again.'
+        `Google sign-in encountered an issue${detail}. Please try again.`
       )}`
     );
   }
