@@ -1,7 +1,7 @@
 import { env } from '../config/env.js';
 import { ACCESS_TTL_MS, REFRESH_TTL_MS } from './tokens.js';
 
-const secure = env.isProd;
+const secure = env.isProd && env.clientOrigin.startsWith('https://');
 
 export function setAuthCookies(res, access, refresh) {
   const base = { httpOnly: true, sameSite: 'lax', secure };

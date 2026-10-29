@@ -104,6 +104,25 @@ export const me = asyncHandler(async (req, res) => {
   res.json({ user: publicUser(user) });
 });
 
+function generateOAuthState() {
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const ts = Date.now().toString();
+  const payload = `${nonce}.${ts}`;
+  const sig = crypto.createHmac('sha256', env.accessSecret).update(payload).digest('hex');
+  return `${payload}.${sig}`;
+}
+
+function verifyOAuthState(stateStr) {
+  if (!stateStr || typeof stateStr !== 'string') return false;
+  const parts = stateStr.split('.');
+  if (parts.length !== 3) return false;
+  const [nonce, tsStr, sig] = parts;
+  const ts = Number(tsStr);
+  if (isNaN(ts) || Date.now() - ts > 15 * 60 * 1000 || ts > Date.now() + 60 * 1000) return false;
+  const expectedSig = crypto.createHmac('sha256', env.accessSecret).update(`${nonce}.${tsStr}`).digest('hex');
+  return sig === expectedSig;
+}
+
 /**
  * Initiates the Google OAuth 2.0 authorization code flow.
  */
@@ -112,12 +131,15 @@ export const googleAuth = (req, res) => {
     return res.redirect(`${env.clientOrigin}/login?error=Google+OAuth+not+configured`);
   }
 
-  const state = crypto.randomBytes(32).toString('hex');
+  const state = generateOAuthState();
+  const secureCookie = env.isProd && env.clientOrigin.startsWith('https://');
+
   res.cookie('rum_oauth_state', state, {
     httpOnly: true,
-    secure: env.isProd,
+    secure: secureCookie,
     sameSite: 'lax',
-    maxAge: 10 * 60 * 1000,
+    path: '/',
+    maxAge: 15 * 60 * 1000,
   });
 
   const params = new URLSearchParams({
@@ -141,13 +163,17 @@ export const googleAuth = (req, res) => {
 export const googleCallback = asyncHandler(async (req, res) => {
   const { code, state, error } = req.query;
   const storedState = req.cookies?.rum_oauth_state;
-  res.clearCookie('rum_oauth_state', { httpOnly: true, secure: env.isProd, sameSite: 'lax' });
+  const secureCookie = env.isProd && env.clientOrigin.startsWith('https://');
+
+  res.clearCookie('rum_oauth_state', { httpOnly: true, secure: secureCookie, sameSite: 'lax', path: '/' });
 
   if (error || !code) {
     return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent(error || 'Authentication cancelled')}`);
   }
 
-  if (!state || !storedState || state !== storedState) {
+  // Validate state against HMAC signature or stored state cookie to defend against CSRF
+  const isValidState = verifyOAuthState(state) || (state && storedState && state === storedState);
+  if (!isValidState) {
     return res.redirect(`${env.clientOrigin}/login?error=${encodeURIComponent('Invalid OAuth state. Please try again.')}`);
   }
 
