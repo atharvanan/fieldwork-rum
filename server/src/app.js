@@ -15,7 +15,9 @@ export function createApp() {
   const app = express();
   app.set('trust proxy', 1);
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-  if (process.env.NODE_ENV !== 'test') app.use(morgan('tiny'));
+  if (process.env.NODE_ENV !== 'test') {
+    app.use(morgan('tiny', { skip: (req) => req.url === '/api/health' }));
+  }
 
   // any site can post here, no cookies. Has to come before the credentialed cors below
   app.use('/api/ingest', cors({ origin: '*', methods: ['POST', 'OPTIONS'], maxAge: 86400 }), ingestRoutes);
