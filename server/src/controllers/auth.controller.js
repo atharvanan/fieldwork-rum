@@ -5,6 +5,11 @@ import { z } from 'zod';
 import { env } from '../config/env.js';
 import { User } from '../models/User.js';
 import { RefreshToken } from '../models/RefreshToken.js';
+import { Project } from '../models/Project.js';
+import { Event } from '../models/Event.js';
+import { Alert } from '../models/Alert.js';
+import { Audit } from '../models/Audit.js';
+import { invalidateKey } from '../services/projectCache.js';
 import { AppError } from '../utils/AppError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { signAccess, signRefresh, sha256, REFRESH_TTL_MS } from '../utils/tokens.js';
@@ -206,4 +211,43 @@ export const googleCallback = asyncHandler(async (req, res) => {
   await startSession(res, user);
   res.redirect(`${env.clientOrigin}/dashboard`);
 });
+
+/**
+ * Permanently deletes the authenticated user's account and performs a cascading purge
+ * of all associated projects, telemetry events, alerts, audits, and session tokens.
+ */
+export const deleteAccount = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+
+  // 1. Identify all projects owned by the user
+  const projects = await Project.find({ owner: userId }).select('_id key').lean();
+  const projectIds = projects.map((p) => p._id);
+
+  // 2. Cascade delete all telemetry data across user projects
+  if (projectIds.length > 0) {
+    await Promise.all([
+      Event.deleteMany({ project: { $in: projectIds } }),
+      Alert.deleteMany({ project: { $in: projectIds } }),
+      Audit.deleteMany({ project: { $in: projectIds } }),
+      Project.deleteMany({ _id: { $in: projectIds } }),
+    ]);
+
+    // Invalidate LRU cache entries for project keys
+    for (const p of projects) {
+      if (p.key) invalidateKey(p.key);
+    }
+  }
+
+  // 3. Purge all refresh tokens / session families for the user
+  await RefreshToken.deleteMany({ user: userId });
+
+  // 4. Delete the User record
+  await User.findByIdAndDelete(userId);
+
+  // 5. Invalidate HTTP session cookies
+  clearAuthCookies(res);
+
+  res.status(204).end();
+});
+
 

@@ -333,3 +333,4 @@ export default function AccessibilityPanel({ project }) {
     </section>
   );
 }
+

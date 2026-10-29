@@ -552,3 +552,4 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
     durationMs,
   };
 }
+

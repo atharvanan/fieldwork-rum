@@ -72,3 +72,4 @@ test('Accessibility Engine - flags viewport zoom restrictions (WCAG 1.4.4 AA)', 
   const result = await auditPage('http://localhost/locked', { htmlContent: zoomLockedHtml, targetLevel: 'AA' });
   assert.ok(result.violations.some((v) => v.ruleId === 'meta-viewport-zoomable'));
 });
+

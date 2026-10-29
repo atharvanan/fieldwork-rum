@@ -3,6 +3,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Shell from '@/components/Shell';
+import AccountPanel from '@/components/AccountPanel';
 import { api } from '@/lib/api';
 
 export default function Sites() {
@@ -62,6 +63,8 @@ export default function Sites() {
         {create.error && <p role="alert" className="mt-3 text-sm text-poor">{create.error.message}</p>}
         <button className="btn-primary mt-4" disabled={create.isPending}>{create.isPending ? 'Adding' : 'Add site'}</button>
       </form>
+
+      <AccountPanel />
     </Shell>
   );
 }

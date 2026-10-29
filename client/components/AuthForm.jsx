@@ -9,6 +9,7 @@ export default function AuthForm({ mode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const oauthError = searchParams.get('error');
+  const isDeleted = searchParams.get('deleted') === 'true';
 
   const isRegister = mode === 'register';
   const [form, setForm] = useState({ name: '', email: '', password: '' });
@@ -36,6 +37,12 @@ export default function AuthForm({ mode }) {
       {oauthError && (
         <div role="alert" className="mt-6 rounded border border-poor/40 bg-poor/5 px-3 py-2.5 text-sm text-poor">
           {oauthError}
+        </div>
+      )}
+
+      {isDeleted && (
+        <div role="status" className="mt-6 rounded border border-good/40 bg-good/5 px-3 py-2.5 text-sm text-good">
+          Your account and all associated telemetry data have been permanently deleted.
         </div>
       )}
 
