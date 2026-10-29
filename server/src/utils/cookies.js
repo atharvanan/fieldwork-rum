@@ -13,7 +13,14 @@ export function setAuthCookies(res, access, refresh) {
 }
 
 export function clearAuthCookies(res) {
-  res.clearCookie('rum_access', { path: '/' });
-  res.clearCookie('rum_refresh', { path: '/api/auth' });
-  res.clearCookie('rum_session', { path: '/' });
+  const base = { httpOnly: true, sameSite: 'lax', secure };
+  // Matching flags must be provided to ensure browsers accept removal of SameSite=Lax cookies
+  res.clearCookie('rum_access', { ...base, path: '/' });
+  res.clearCookie('rum_refresh', { ...base, path: '/api/auth' });
+  res.clearCookie('rum_session', { httpOnly: false, sameSite: 'lax', secure, path: '/' });
+
+  // Explicitly overwrite with zero max-age and epoch expiration for maximum browser compatibility
+  res.cookie('rum_access', '', { ...base, path: '/', maxAge: 0, expires: new Date(0) });
+  res.cookie('rum_refresh', '', { ...base, path: '/api/auth', maxAge: 0, expires: new Date(0) });
+  res.cookie('rum_session', '', { httpOnly: false, sameSite: 'lax', secure, path: '/', maxAge: 0, expires: new Date(0) });
 }
