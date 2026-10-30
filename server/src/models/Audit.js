@@ -38,6 +38,11 @@ const auditSchema = new mongoose.Schema(
     url: { type: String, required: true, trim: true },
     targetLevel: { type: String, enum: ['A', 'AA', 'AAA'], default: 'AA' },
     score: { type: Number, min: 0, max: 100, required: true },
+    scores: {
+      A: { type: Number, min: 0, max: 100, default: 100 },
+      AA: { type: Number, min: 0, max: 100, default: 100 },
+      AAA: { type: Number, min: 0, max: 100, default: 100 },
+    },
     status: { type: String, enum: ['completed', 'failed'], default: 'completed' },
     summary: {
       violationsCount: { type: Number, default: 0 },

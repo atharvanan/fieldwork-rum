@@ -65,7 +65,10 @@ export default function AccessibilityPanel({ project }) {
         body: { url, targetLevel },
       }),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['audits', project._id] });
+      queryClient.setQueryData(['audits', project._id], (old) => {
+        const list = old?.audits ? [data.audit, ...old.audits.filter((a) => a._id !== data.audit._id)] : [data.audit];
+        return { audits: list };
+      });
       setSelectedAuditId(data.audit._id);
     },
   });
@@ -333,31 +336,37 @@ export default function AccessibilityPanel({ project }) {
               </div>
             </div>
 
-            {/* Standard Levels Breakdown */}
+            {/* Standard Levels Breakdown with Exact Scores */}
             <div className="flex flex-col justify-center border-b border-rule/60 pb-5 md:col-span-3 md:border-b-0 md:border-r md:pb-0 md:px-6">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted">By Standard Level</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted">Legal Conformance Tiers</span>
               <div className="mt-2.5 flex items-center gap-2 text-xs">
-                {['A', 'AA', 'AAA'].map((lvl) => {
+                {[
+                  { lvl: 'A', name: 'Baseline' },
+                  { lvl: 'AA', name: 'Legal' },
+                  { lvl: 'AAA', name: 'Enhanced' },
+                ].map(({ lvl, name }) => {
+                  const levelScore = currentAudit.scores?.[lvl] ?? (lvl === currentAudit.targetLevel ? currentAudit.score : null);
                   const count = currentAudit.summary?.byWcag?.[lvl] || 0;
-                  const isAudited =
-                    lvl === 'A' ||
-                    (lvl === 'AA' && (currentAudit.targetLevel === 'AA' || currentAudit.targetLevel === 'AAA')) ||
-                    (lvl === 'AAA' && currentAudit.targetLevel === 'AAA');
+                  const isCurrentTarget = lvl === currentAudit.targetLevel;
+
+                  const isPass = (levelScore ?? currentAudit.score) >= 90;
+                  const bgStyle = isPass
+                    ? 'border-emerald-300 bg-emerald-50/70 text-emerald-900'
+                    : 'border-rose-300 bg-rose-50/70 text-rose-900';
 
                   return (
                     <div
                       key={lvl}
-                      className={`flex-1 rounded border px-2 py-1.5 text-center transition-all ${
-                        !isAudited
-                          ? 'border-rule/40 bg-canvas/30 opacity-40'
-                          : count === 0
-                          ? 'border-emerald-200 bg-emerald-50/50 text-emerald-800'
-                          : 'border-rose-200 bg-rose-50/50 text-rose-800'
+                      className={`flex-1 rounded-md border p-1.5 text-center transition-all ${bgStyle} ${
+                        isCurrentTarget ? 'ring-2 ring-ink/30 shadow-xs' : 'opacity-90'
                       }`}
                     >
-                      <div className="text-[10px] font-bold text-muted uppercase">Lvl {lvl}</div>
-                      <div className="mt-0.5 font-bold num text-xs">
-                        {isAudited ? (count === 0 ? '✓ Pass' : `${count} Fail`) : 'N/A'}
+                      <div className="text-[10px] font-bold uppercase tracking-wider opacity-80">{lvl} ({name})</div>
+                      <div className="mt-0.5 text-sm font-bold num">
+                        {levelScore !== null && levelScore !== undefined ? `${levelScore}%` : count === 0 ? '100%' : `${Math.max(0, 100 - count * 15)}%`}
+                      </div>
+                      <div className="text-[9px] font-semibold uppercase opacity-75">
+                        {count === 0 ? '✓ Pass' : `${count} Issue${count > 1 ? 's' : ''}`}
                       </div>
                     </div>
                   );
