@@ -1,5 +1,11 @@
 import crypto from 'node:crypto';
+import dns from 'node:dns';
 import bcrypt from 'bcryptjs';
+
+// Resolve IPv4 addresses first to avoid unroutable IPv6 timeouts inside Docker/WSL2
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {}
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { env } from '../config/env.js';
@@ -166,6 +172,26 @@ export const googleAuth = (req, res) => {
   res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
 };
 
+async function resilientFetch(url, options = {}, retries = 3) {
+  let lastErr;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await fetch(url, options);
+    } catch (err) {
+      lastErr = err;
+      console.warn(
+        `[auth] Outbound fetch attempt ${attempt} failed: ${err.message}${
+          err.cause ? ` (${err.cause.code || err.cause.message})` : ''
+        }`
+      );
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 /**
  * Google OAuth 2.0 callback handler.
  * Exchanges authorization code for tokens, retrieves user profile, links or provisions
@@ -190,7 +216,7 @@ export const googleCallback = asyncHandler(async (req, res) => {
     }
 
     // Exchange authorization code for access and ID tokens
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    const tokenResponse = await resilientFetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -214,7 +240,7 @@ export const googleCallback = asyncHandler(async (req, res) => {
     }
 
     const tokenData = await tokenResponse.json();
-    const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    const profileResponse = await resilientFetch('https://www.googleapis.com/oauth2/v3/userinfo', {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
 
@@ -285,8 +311,10 @@ export const googleCallback = asyncHandler(async (req, res) => {
     await startSession(res, user);
     res.redirect(`${env.clientOrigin}/dashboard`);
   } catch (err) {
-    console.error('[auth] Google OAuth callback exception:', err);
-    const detail = !env.isProd && err?.message ? `: ${err.message}` : '';
+    console.error('[auth] Google OAuth callback exception:', err, err.cause);
+    const causeMsg = err?.cause?.code || err?.cause?.message;
+    const detailMsg = causeMsg ? `${err.message} (${causeMsg})` : err?.message;
+    const detail = !env.isProd && detailMsg ? `: ${detailMsg}` : '';
     return res.redirect(
       `${env.clientOrigin}/login?error=${encodeURIComponent(
         `Google sign-in encountered an issue${detail}. Please try again.`

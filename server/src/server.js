@@ -1,9 +1,15 @@
+import dns from 'node:dns';
 import mongoose from 'mongoose';
 import { env } from './config/env.js';
 import { connectDb } from './config/db.js';
 import { createApp } from './app.js';
 import { startBuffer, stopBuffer } from './services/eventBuffer.js';
 import { startAlertJob } from './jobs/alerts.js';
+
+// Resolve IPv4 addresses first to avoid unroutable IPv6 timeouts inside Docker/WSL2
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {}
 
 await connectDb();
 startBuffer();
