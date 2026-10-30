@@ -23,6 +23,15 @@ const violationSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const passSchema = new mongoose.Schema(
+  {
+    ruleId: { type: String, required: true },
+    wcagLevel: { type: String, enum: ['A', 'AA', 'AAA'], required: true },
+    description: { type: String, required: true },
+  },
+  { _id: false }
+);
+
 const auditSchema = new mongoose.Schema(
   {
     project: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
@@ -46,6 +55,7 @@ const auditSchema = new mongoose.Schema(
       },
     },
     violations: { type: [violationSchema], default: [] },
+    passes: { type: [passSchema], default: [] },
     durationMs: { type: Number, default: 0 },
     error: { type: String },
   },

@@ -1,8 +1,14 @@
 /**
  * WCAG 2.1 / 2.2 Accessibility Evaluation Engine
  * Performs structural, semantic, landmark, form control, and contrast assessment.
- * Evaluates Conformance Levels A, AA, and AAA.
+ * Evaluates Conformance Levels A, AA, and AAA according to W3C specifications.
  */
+
+const LEVEL_ORDER = { A: 1, AA: 2, AAA: 3 };
+
+function isLevelApplicable(ruleLevel, targetLevel) {
+  return (LEVEL_ORDER[ruleLevel] || 1) <= (LEVEL_ORDER[targetLevel] || 2);
+}
 
 // Relative luminance formula per W3C WCAG 2.1 spec
 function parseColor(str) {
@@ -26,6 +32,8 @@ function parseColor(str) {
     grey: [128, 128, 128],
     red: [255, 0, 0],
     blue: [0, 0, 255],
+    yellow: [255, 255, 0],
+    green: [0, 128, 0],
   };
   return named[s] || null;
 }
@@ -80,6 +88,10 @@ function parseHtml(html) {
 
 /**
  * Executes a full WCAG compliance assessment on an HTML document.
+ * Filters strictly according to the requested targetLevel:
+ * - Level A evaluates only Level A criteria
+ * - Level AA evaluates Level A + Level AA criteria
+ * - Level AAA evaluates Level A + Level AA + Level AAA criteria
  */
 export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
   const startTime = Date.now();
@@ -107,9 +119,10 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
 
   const { elements } = parseHtml(html);
   const violationsMap = new Map();
-  let passesCount = 0;
+  const passes = [];
 
   function addViolation(rule) {
+    if (!isLevelApplicable(rule.wcagLevel, targetLevel)) return;
     const existing = violationsMap.get(rule.ruleId);
     if (existing) {
       existing.nodes.push(...rule.nodes);
@@ -117,6 +130,15 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
       violationsMap.set(rule.ruleId, { ...rule });
     }
   }
+
+  function addPass(ruleId, wcagLevel, description) {
+    if (!isLevelApplicable(wcagLevel, targetLevel)) return;
+    passes.push({ ruleId, wcagLevel, description });
+  }
+
+  // ==========================================
+  // LEVEL A CRITERIA (Applicable to A, AA, AAA)
+  // ==========================================
 
   // 1. Language of Page (WCAG 3.1.1 - Level A)
   const htmlTag = elements.find((e) => e.tagName === 'html');
@@ -132,7 +154,7 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
       nodes: [{ html: htmlTag?.raw || '<html>', target: ['html'], failureSummary: 'Missing lang attribute on <html> element' }],
     });
   } else {
-    passesCount++;
+    addPass('html-has-lang', 'A', 'Page specifies a valid language attribute on <html>');
   }
 
   // 2. Document Title (WCAG 2.4.2 - Level A)
@@ -149,31 +171,10 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
       nodes: [{ html: '<title></title>', target: ['head > title'], failureSummary: 'Document title is missing or empty' }],
     });
   } else {
-    passesCount++;
+    addPass('document-title', 'A', 'Document has a non-empty <title>');
   }
 
-  // 3. Viewport Zoom Lock (WCAG 1.4.4 - Level AA)
-  const metaViewports = elements.filter((e) => e.tagName === 'meta' && e.attrs.name === 'viewport');
-  let zoomLocked = false;
-  for (const m of metaViewports) {
-    const content = (m.attrs.content || '').toLowerCase();
-    if (content.includes('user-scalable=no') || content.includes('maximum-scale=1.0') || content.includes('maximum-scale=1')) {
-      zoomLocked = true;
-      addViolation({
-        ruleId: 'meta-viewport-zoomable',
-        impact: 'critical',
-        wcagLevel: 'AA',
-        wcagTags: ['wcag2aa', 'wcag144'],
-        description: 'Zooming and scaling must not be disabled to accommodate low-vision users.',
-        help: 'Remove user-scalable=no or maximum-scale=1 from the viewport meta tag.',
-        helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/resize-text.html',
-        nodes: [{ html: m.raw, target: ['meta[name="viewport"]'], failureSummary: 'user-scalable=no prevents text resizing up to 200%' }],
-      });
-    }
-  }
-  if (!zoomLocked) passesCount++;
-
-  // 4. Image Alternative Text (WCAG 1.1.1 - Level A)
+  // 3. Image Alternative Text (WCAG 1.1.1 - Level A)
   const images = elements.filter((e) => e.tagName === 'img');
   let missingAltNodes = [];
   let redundantAltNodes = [];
@@ -209,7 +210,7 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
       nodes: missingAltNodes,
     });
   } else if (images.length > 0) {
-    passesCount++;
+    addPass('image-alt', 'A', 'All images contain valid alt attributes');
   }
 
   if (redundantAltNodes.length > 0) {
@@ -225,7 +226,7 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
     });
   }
 
-  // 5. Form Input Labels (WCAG 1.3.1, 4.1.2 - Level A)
+  // 4. Form Input Labels (WCAG 1.3.1, 4.1.2 - Level A)
   const inputs = elements.filter((e) => ['input', 'select', 'textarea'].includes(e.tagName));
   const labels = elements.filter((e) => e.tagName === 'label');
   const labelForIds = new Set(labels.map((l) => l.attrs.for).filter(Boolean));
@@ -260,10 +261,10 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
       nodes: missingLabelNodes,
     });
   } else if (inputs.length > 0) {
-    passesCount++;
+    addPass('label', 'A', 'Form controls have associated labels');
   }
 
-  // 6. Button Names & Accessible Text (WCAG 4.1.2 - Level A)
+  // 5. Button Discernible Text (WCAG 4.1.2 - Level A)
   const buttonRegex = /<button([^>]*)>([\s\S]*?)<\/button>/gi;
   const missingButtonNodes = [];
   let btnMatch;
@@ -296,95 +297,10 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
       nodes: missingButtonNodes,
     });
   } else {
-    passesCount++;
+    addPass('button-name', 'A', 'All buttons have discernible text or accessible labels');
   }
 
-  // 7. Generic Link Text (WCAG 2.4.4 - Level A & AA)
-  const linkRegex = /<a([^>]*)>([\s\S]*?)<\/a>/gi;
-  const genericLinkNodes = [];
-  let linkMatch;
-  const genericWords = new Set(['click here', 'here', 'more', 'read more', 'learn more', 'link', 'details']);
-
-  while ((linkMatch = linkRegex.exec(html)) !== null) {
-    const rawTag = linkMatch[0].slice(0, 250);
-    const innerContent = linkMatch[2].replace(/<[^>]+>/g, '').trim().toLowerCase();
-    const hasAria = /aria-label=["'][^"']+["']/i.test(linkMatch[1]);
-
-    if (!hasAria && genericWords.has(innerContent)) {
-      genericLinkNodes.push({
-        html: rawTag,
-        target: ['a'],
-        failureSummary: `Link text "${innerContent}" is ambiguous outside context`,
-      });
-    }
-  }
-
-  if (genericLinkNodes.length > 0) {
-    addViolation({
-      ruleId: 'link-name-discernible',
-      impact: 'serious',
-      wcagLevel: 'AA',
-      wcagTags: ['wcag2aa', 'wcag244'],
-      description: 'Links must have meaningful purpose discernible from link text alone or programmatically determined.',
-      help: 'Replace generic words like "click here" or "read more" with specific descriptive destinations.',
-      helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/link-purpose-in-context.html',
-      nodes: genericLinkNodes,
-    });
-  } else {
-    passesCount++;
-  }
-
-  // 8. Heading Hierarchy (WCAG 1.3.1, 2.4.6 - Level AA)
-  const headingMatches = [...html.matchAll(/<(h[1-6])[^>]*>/gi)];
-  let headingOrderValid = true;
-  let lastLevel = 0;
-  const skippedHeadings = [];
-
-  headingMatches.forEach((m) => {
-    const level = parseInt(m[1][1], 10);
-    if (lastLevel > 0 && level > lastLevel + 1) {
-      headingOrderValid = false;
-      skippedHeadings.push({
-        html: m[0],
-        target: [m[1].toLowerCase()],
-        failureSummary: `Skipped heading level from <h${lastLevel}> directly to <h${level}>`,
-      });
-    }
-    lastLevel = level;
-  });
-
-  const hasH1 = headingMatches.some((m) => m[1].toLowerCase() === 'h1');
-  if (!hasH1 && headingMatches.length > 0) {
-    addViolation({
-      ruleId: 'page-has-h1',
-      impact: 'moderate',
-      wcagLevel: 'AA',
-      wcagTags: ['wcag2aa', 'wcag131'],
-      description: 'Pages should contain a top-level <h1> heading marking the primary topic.',
-      help: 'Add an <h1> heading to identify the primary content of the page.',
-      helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/section-headings.html',
-      nodes: [{ html: '<body>', target: ['body'], failureSummary: 'No <h1> heading found on the page' }],
-    });
-  } else {
-    passesCount++;
-  }
-
-  if (!headingOrderValid) {
-    addViolation({
-      ruleId: 'heading-order',
-      impact: 'moderate',
-      wcagLevel: 'AA',
-      wcagTags: ['wcag2aa', 'wcag131'],
-      description: 'Heading levels should only increase by one level at a time without skipping.',
-      help: 'Restructure heading tags to maintain an orderly sequence (h1 -> h2 -> h3).',
-      helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/info-and-relationships.html',
-      nodes: skippedHeadings,
-    });
-  } else {
-    passesCount++;
-  }
-
-  // 9. Landmarks: Main Region (WCAG 1.3.1 - Level A)
+  // 6. Landmarks: Main Region (WCAG 1.3.1 - Level A)
   const hasMainLandmark = elements.some((e) => e.tagName === 'main' || e.attrs.role === 'main');
   if (!hasMainLandmark) {
     addViolation({
@@ -398,10 +314,10 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
       nodes: [{ html: '<body>', target: ['body'], failureSummary: 'No <main> landmark detected' }],
     });
   } else {
-    passesCount++;
+    addPass('landmark-one-main', 'A', 'Page contains a primary <main> content landmark');
   }
 
-  // 10. Avoid Positive Tabindex (WCAG 2.4.3 - Level A)
+  // 7. Avoid Positive Tabindex (WCAG 2.4.3 - Level A)
   const positiveTabindexNodes = [];
   elements.forEach((e) => {
     const tabIndex = parseInt(e.attrs.tabindex, 10);
@@ -426,10 +342,10 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
       nodes: positiveTabindexNodes,
     });
   } else {
-    passesCount++;
+    addPass('tabindex-positive', 'A', 'No disruptive positive tabindex values detected');
   }
 
-  // 11. Duplicate ID Validation (WCAG 4.1.1 - Level A)
+  // 8. Duplicate ID Validation (WCAG 4.1.1 - Level A)
   const idCounts = new Map();
   elements.forEach((e) => {
     if (e.attrs.id) {
@@ -461,65 +377,349 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
       nodes: duplicateIdNodes,
     });
   } else {
-    passesCount++;
+    addPass('duplicate-id', 'A', 'All element ID attributes are unique');
   }
 
-  // 12. Inline Style Color Contrast Inspection (WCAG 1.4.3 Level AA & 1.4.6 Level AAA)
-  const contrastNodesAA = [];
-  const contrastNodesAAA = [];
+  // 9. Frame Title (WCAG 4.1.2 - Level A)
+  const iframes = elements.filter((e) => e.tagName === 'iframe');
+  const missingIframeTitles = [];
+  iframes.forEach((frame, idx) => {
+    if (!frame.attrs.title || !frame.attrs.title.trim()) {
+      missingIframeTitles.push({
+        html: frame.raw,
+        target: [frame.attrs.id ? `#${frame.attrs.id}` : `iframe:nth-of-type(${idx + 1})`],
+        failureSummary: '<iframe> element is missing an accessible title attribute',
+      });
+    }
+  });
+  if (missingIframeTitles.length > 0) {
+    addViolation({
+      ruleId: 'frame-title',
+      impact: 'serious',
+      wcagLevel: 'A',
+      wcagTags: ['wcag2a', 'wcag412'],
+      description: '<iframe> elements must have a title attribute describing their embedded content.',
+      help: 'Add a descriptive title="..." attribute to every <iframe> element.',
+      helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/name-role-value.html',
+      nodes: missingIframeTitles,
+    });
+  } else if (iframes.length > 0) {
+    addPass('frame-title', 'A', 'All iframes provide accessible titles');
+  }
 
-  elements.forEach((e) => {
-    const style = e.attrs.style || '';
-    if (style.includes('color:') && (style.includes('background:') || style.includes('background-color:'))) {
-      const colorMatch = style.match(/(?:^|;)\s*color:\s*([^;]+)/i);
-      const bgMatch = style.match(/(?:^|;)\s*background(?:-color)?:\s*([^;]+)/i);
-      if (colorMatch && bgMatch) {
-        const fg = parseColor(colorMatch[1]);
-        const bg = parseColor(bgMatch[1]);
-        if (fg && bg) {
-          const ratio = contrastRatio(fg, bg);
-          if (ratio < 4.5) {
-            contrastNodesAA.push({
-              html: e.raw,
-              target: [e.attrs.id ? `#${e.attrs.id}` : e.tagName],
-              failureSummary: `Contrast ratio is ${ratio.toFixed(2)}:1 (Minimum required for Level AA is 4.5:1)`,
-            });
-          } else if (ratio < 7.0) {
-            contrastNodesAAA.push({
-              html: e.raw,
-              target: [e.attrs.id ? `#${e.attrs.id}` : e.tagName],
-              failureSummary: `Contrast ratio is ${ratio.toFixed(2)}:1 (Enhanced requirement for Level AAA is 7.0:1)`,
-            });
+  // ==========================================
+  // LEVEL AA CRITERIA (Applicable to AA & AAA)
+  // ==========================================
+  if (isLevelApplicable('AA', targetLevel)) {
+    // 10. Viewport Zoom Lock (WCAG 1.4.4 - Level AA)
+    const metaViewports = elements.filter((e) => e.tagName === 'meta' && e.attrs.name === 'viewport');
+    let zoomLocked = false;
+    for (const m of metaViewports) {
+      const content = (m.attrs.content || '').toLowerCase();
+      if (content.includes('user-scalable=no') || content.includes('maximum-scale=1.0') || content.includes('maximum-scale=1')) {
+        zoomLocked = true;
+        addViolation({
+          ruleId: 'meta-viewport-zoomable',
+          impact: 'critical',
+          wcagLevel: 'AA',
+          wcagTags: ['wcag2aa', 'wcag144'],
+          description: 'Zooming and scaling must not be disabled to accommodate low-vision users.',
+          help: 'Remove user-scalable=no or maximum-scale=1 from the viewport meta tag.',
+          helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/resize-text.html',
+          nodes: [{ html: m.raw, target: ['meta[name="viewport"]'], failureSummary: 'user-scalable=no prevents text resizing up to 200%' }],
+        });
+      }
+    }
+    if (!zoomLocked) addPass('meta-viewport-zoomable', 'AA', 'Viewport permits scaling and pinch-to-zoom up to 200%');
+
+    // 11. Generic Link Text in Context (WCAG 2.4.4 - Level AA)
+    const linkRegex = /<a([^>]*)>([\s\S]*?)<\/a>/gi;
+    const genericLinkNodes = [];
+    let linkMatch;
+    const genericWords = new Set(['click here', 'here', 'more', 'read more', 'learn more', 'link', 'details']);
+
+    while ((linkMatch = linkRegex.exec(html)) !== null) {
+      const rawTag = linkMatch[0].slice(0, 250);
+      const innerContent = linkMatch[2].replace(/<[^>]+>/g, '').trim().toLowerCase();
+      const hasAria = /aria-label=["'][^"']+["']/i.test(linkMatch[1]);
+
+      if (!hasAria && genericWords.has(innerContent)) {
+        genericLinkNodes.push({
+          html: rawTag,
+          target: ['a'],
+          failureSummary: `Link text "${innerContent}" is ambiguous outside context`,
+        });
+      }
+    }
+
+    if (genericLinkNodes.length > 0) {
+      addViolation({
+        ruleId: 'link-name-discernible',
+        impact: 'serious',
+        wcagLevel: 'AA',
+        wcagTags: ['wcag2aa', 'wcag244'],
+        description: 'Links must have meaningful purpose discernible from link text alone or programmatically determined.',
+        help: 'Replace generic words like "click here" or "read more" with specific descriptive destinations.',
+        helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/link-purpose-in-context.html',
+        nodes: genericLinkNodes,
+      });
+    } else {
+      addPass('link-name-discernible', 'AA', 'All hyperlinks have discernible, descriptive text');
+    }
+
+    // 12. Top-level <h1> Heading (WCAG 1.3.1, 2.4.6 - Level AA)
+    const headingMatches = [...html.matchAll(/<(h[1-6])[^>]*>/gi)];
+    const hasH1 = headingMatches.some((m) => m[1].toLowerCase() === 'h1');
+    if (!hasH1 && headingMatches.length > 0) {
+      addViolation({
+        ruleId: 'page-has-h1',
+        impact: 'moderate',
+        wcagLevel: 'AA',
+        wcagTags: ['wcag2aa', 'wcag131'],
+        description: 'Pages should contain a top-level <h1> heading marking the primary topic.',
+        help: 'Add an <h1> heading to identify the primary content of the page.',
+        helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/section-headings.html',
+        nodes: [{ html: '<body>', target: ['body'], failureSummary: 'No <h1> heading found on the page' }],
+      });
+    } else if (hasH1) {
+      addPass('page-has-h1', 'AA', 'Document contains a top-level <h1> heading');
+    }
+
+    // 13. Heading Order Hierarchy (WCAG 1.3.1 - Level AA)
+    let headingOrderValid = true;
+    let lastLevel = 0;
+    const skippedHeadings = [];
+
+    headingMatches.forEach((m) => {
+      const level = parseInt(m[1][1], 10);
+      if (lastLevel > 0 && level > lastLevel + 1) {
+        headingOrderValid = false;
+        skippedHeadings.push({
+          html: m[0],
+          target: [m[1].toLowerCase()],
+          failureSummary: `Skipped heading level from <h${lastLevel}> directly to <h${level}>`,
+        });
+      }
+      lastLevel = level;
+    });
+
+    if (!headingOrderValid) {
+      addViolation({
+        ruleId: 'heading-order',
+        impact: 'moderate',
+        wcagLevel: 'AA',
+        wcagTags: ['wcag2aa', 'wcag131'],
+        description: 'Heading levels should only increase by one level at a time without skipping.',
+        help: 'Restructure heading tags to maintain an orderly sequence (h1 -> h2 -> h3).',
+        helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/info-and-relationships.html',
+        nodes: skippedHeadings,
+      });
+    } else if (headingMatches.length > 0) {
+      addPass('heading-order', 'AA', 'Headings follow a logical sequential order');
+    }
+
+    // 14. Inline Style Minimum Contrast (WCAG 1.4.3 - Level AA: 4.5:1)
+    const contrastNodesAA = [];
+    elements.forEach((e) => {
+      const style = e.attrs.style || '';
+      if (style.includes('color:') && (style.includes('background:') || style.includes('background-color:'))) {
+        const colorMatch = style.match(/(?:^|;)\s*color:\s*([^;]+)/i);
+        const bgMatch = style.match(/(?:^|;)\s*background(?:-color)?:\s*([^;]+)/i);
+        if (colorMatch && bgMatch) {
+          const fg = parseColor(colorMatch[1]);
+          const bg = parseColor(bgMatch[1]);
+          if (fg && bg) {
+            const ratio = contrastRatio(fg, bg);
+            if (ratio < 4.5) {
+              contrastNodesAA.push({
+                html: e.raw,
+                target: [e.attrs.id ? `#${e.attrs.id}` : e.tagName],
+                failureSummary: `Contrast ratio is ${ratio.toFixed(2)}:1 (Minimum required for Level AA is 4.5:1)`,
+              });
+            }
           }
         }
       }
-    }
-  });
-
-  if (contrastNodesAA.length > 0) {
-    addViolation({
-      ruleId: 'color-contrast',
-      impact: 'serious',
-      wcagLevel: 'AA',
-      wcagTags: ['wcag2aa', 'wcag143'],
-      description: 'Text elements must have a contrast ratio of at least 4.5:1 against the background.',
-      help: 'Adjust font or background colors to meet minimum 4.5:1 contrast requirements.',
-      helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html',
-      nodes: contrastNodesAA,
     });
+
+    if (contrastNodesAA.length > 0) {
+      addViolation({
+        ruleId: 'color-contrast',
+        impact: 'serious',
+        wcagLevel: 'AA',
+        wcagTags: ['wcag2aa', 'wcag143'],
+        description: 'Text elements must have a contrast ratio of at least 4.5:1 against the background.',
+        help: 'Adjust font or background colors to meet minimum 4.5:1 contrast requirements.',
+        helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/contrast-minimum.html',
+        nodes: contrastNodesAA,
+      });
+    } else {
+      addPass('color-contrast', 'AA', 'Inline text meets Level AA 4.5:1 color contrast threshold');
+    }
   }
 
-  if (contrastNodesAAA.length > 0 && targetLevel === 'AAA') {
-    addViolation({
-      ruleId: 'color-contrast-enhanced',
-      impact: 'moderate',
-      wcagLevel: 'AAA',
-      wcagTags: ['wcag2aaa', 'wcag146'],
-      description: 'Enhanced contrast requires a ratio of at least 7:1 for normal body text.',
-      help: 'Darken text or lighten background to achieve high-contrast readability (7:1).',
-      helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/contrast-enhanced.html',
-      nodes: contrastNodesAAA,
+  // ==========================================
+  // LEVEL AAA CRITERIA (Applicable ONLY to AAA)
+  // ==========================================
+  if (isLevelApplicable('AAA', targetLevel)) {
+    // 15. Enhanced Color Contrast (WCAG 1.4.6 - Level AAA: 7:1)
+    const contrastNodesAAA = [];
+    elements.forEach((e) => {
+      const style = e.attrs.style || '';
+      if (style.includes('color:') && (style.includes('background:') || style.includes('background-color:'))) {
+        const colorMatch = style.match(/(?:^|;)\s*color:\s*([^;]+)/i);
+        const bgMatch = style.match(/(?:^|;)\s*background(?:-color)?:\s*([^;]+)/i);
+        if (colorMatch && bgMatch) {
+          const fg = parseColor(colorMatch[1]);
+          const bg = parseColor(bgMatch[1]);
+          if (fg && bg) {
+            const ratio = contrastRatio(fg, bg);
+            if (ratio < 7.0) {
+              contrastNodesAAA.push({
+                html: e.raw,
+                target: [e.attrs.id ? `#${e.attrs.id}` : e.tagName],
+                failureSummary: `Contrast ratio is ${ratio.toFixed(2)}:1 (Enhanced requirement for Level AAA is 7:1)`,
+              });
+            }
+          }
+        }
+      }
     });
+
+    if (contrastNodesAAA.length > 0) {
+      addViolation({
+        ruleId: 'color-contrast-enhanced',
+        impact: 'moderate',
+        wcagLevel: 'AAA',
+        wcagTags: ['wcag2aaa', 'wcag146'],
+        description: 'Enhanced contrast requires a ratio of at least 7:1 for normal body text.',
+        help: 'Darken text or lighten background to achieve high-contrast readability (7:1).',
+        helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/contrast-enhanced.html',
+        nodes: contrastNodesAAA,
+      });
+    } else {
+      addPass('color-contrast-enhanced', 'AAA', 'All evaluated text meets enhanced 7:1 contrast ratio');
+    }
+
+    // 16. Justified Text Prohibition (WCAG 1.4.8 - Level AAA)
+    const justifiedNodes = [];
+    elements.forEach((e) => {
+      const style = (e.attrs.style || '').toLowerCase();
+      if (style.includes('text-align: justify') || style.includes('text-align:justify')) {
+        justifiedNodes.push({
+          html: e.raw,
+          target: [e.attrs.id ? `#${e.attrs.id}` : e.tagName],
+          failureSummary: 'text-align: justify creates irregular word spacing that impedes reading for people with dyslexia',
+        });
+      }
+    });
+
+    if (justifiedNodes.length > 0) {
+      addViolation({
+        ruleId: 'visual-presentation-no-justify',
+        impact: 'moderate',
+        wcagLevel: 'AAA',
+        wcagTags: ['wcag2aaa', 'wcag148'],
+        description: 'Text must not be fully justified (aligned to both left and right margins).',
+        help: 'Use left-aligned (or right-aligned for RTL) text instead of justified text.',
+        helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/visual-presentation.html',
+        nodes: justifiedNodes,
+      });
+    } else {
+      addPass('visual-presentation-no-justify', 'AAA', 'No fully justified text detected');
+    }
+
+    // 17. No Automatic Redirects or Refresh Timeouts (WCAG 2.2.3 - Level AAA)
+    const refreshMetas = elements.filter(
+      (e) => e.tagName === 'meta' && (e.attrs['http-equiv'] || '').toLowerCase() === 'refresh'
+    );
+    if (refreshMetas.length > 0) {
+      addViolation({
+        ruleId: 'no-timing-refresh',
+        impact: 'serious',
+        wcagLevel: 'AAA',
+        wcagTags: ['wcag2aaa', 'wcag223'],
+        description: 'Automatic page refreshes or timed redirects disrupt users with cognitive or motor impairments.',
+        help: 'Remove <meta http-equiv="refresh"> and allow users to initiate navigation or updates explicitly.',
+        helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/no-timing.html',
+        nodes: refreshMetas.map((m) => ({ html: m.raw, target: ['meta[http-equiv="refresh"]'], failureSummary: 'Automatic refresh timeout' })),
+      });
+    } else {
+      addPass('no-timing-refresh', 'AAA', 'Page does not impose automatic timed refreshes or redirects');
+    }
+
+    // 18. Strict Link Purpose Alone (WCAG 2.4.9 - Level AAA)
+    const allLinksRegex = /<a([^>]*)>([\s\S]*?)<\/a>/gi;
+    const contextDependentLinks = [];
+    let lMatch;
+    const vaguePhrases = new Set(['click here', 'read more', 'learn more', 'more', 'view', 'link', 'details', 'here', 'continue']);
+
+    while ((lMatch = allLinksRegex.exec(html)) !== null) {
+      const text = lMatch[2].replace(/<[^>]+>/g, '').trim().toLowerCase();
+      const hasAria = /aria-label=["'][^"']+["']/i.test(lMatch[1]);
+      if (!hasAria && vaguePhrases.has(text)) {
+        contextDependentLinks.push({
+          html: lMatch[0].slice(0, 200),
+          target: ['a'],
+          failureSummary: `Link text "${text}" does not convey destination when read in isolation`,
+        });
+      }
+    }
+
+    if (contextDependentLinks.length > 0) {
+      addViolation({
+        ruleId: 'link-purpose-link-only',
+        impact: 'serious',
+        wcagLevel: 'AAA',
+        wcagTags: ['wcag2aaa', 'wcag249'],
+        description: 'A mechanism is available so that each link purpose can be identified from link text alone.',
+        help: 'Ensure all hyperlinks contain self-contained descriptive labels without relying on surrounding context.',
+        helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/link-purpose-link-only.html',
+        nodes: contextDependentLinks,
+      });
+    } else {
+      addPass('link-purpose-link-only', 'AAA', 'All hyperlinks convey distinct purpose from text alone');
+    }
+
+    // 19. Moving or Flashing Content (WCAG 2.2.4 - Level AAA)
+    const deprecatedMovingElements = elements.filter((e) => ['marquee', 'blink'].includes(e.tagName));
+    if (deprecatedMovingElements.length > 0) {
+      addViolation({
+        ruleId: 'interruptions-marquee-blink',
+        impact: 'critical',
+        wcagLevel: 'AAA',
+        wcagTags: ['wcag2aaa', 'wcag224'],
+        description: 'Moving, blinking, or scrolling text can cause severe distraction or disorientation.',
+        help: 'Remove <marquee> and <blink> tags from modern web documents.',
+        helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/interruptions.html',
+        nodes: deprecatedMovingElements.map((e) => ({ html: e.raw, target: [e.tagName], failureSummary: 'Deprecated distracting element' })),
+      });
+    } else {
+      addPass('interruptions-marquee-blink', 'AAA', 'No distracting <marquee> or <blink> tags detected');
+    }
+
+    // 20. Location Orientation / Breadcrumbs (WCAG 2.4.8 - Level AAA)
+    const hasBreadcrumbs =
+      html.includes('aria-label="breadcrumb"') ||
+      html.includes("aria-label='breadcrumb'") ||
+      html.includes('itemtype="https://schema.org/BreadcrumbList"') ||
+      html.includes('rel="breadcrumb"') ||
+      elements.some((e) => e.attrs['aria-current'] === 'page');
+
+    if (!hasBreadcrumbs) {
+      addViolation({
+        ruleId: 'location-breadcrumbs',
+        impact: 'minor',
+        wcagLevel: 'AAA',
+        wcagTags: ['wcag2aaa', 'wcag248'],
+        description: 'Information about the user location within a set of web pages should be provided (e.g. breadcrumbs).',
+        help: 'Add a <nav aria-label="breadcrumb"> or breadcrumb list to help users orient themselves.',
+        helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/location.html',
+        nodes: [{ html: '<body>', target: ['body'], failureSummary: 'No breadcrumbs or location indicators found' }],
+      });
+    } else {
+      addPass('location-breadcrumbs', 'AAA', 'Page provides location indicators or breadcrumbs');
+    }
   }
 
   // Compile violation metrics
@@ -532,7 +732,7 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
     if (byWcag[v.wcagLevel] !== undefined) byWcag[v.wcagLevel] += v.nodes.length;
   });
 
-  // Weighted Compliance Score (0 to 100)
+  // Weighted Compliance Score (0 to 100) strictly relative to the target level
   const penalty = byImpact.critical * 12 + byImpact.serious * 6 + byImpact.moderate * 2 + byImpact.minor * 1;
   const score = Math.max(0, Math.min(100, Math.round(100 - penalty)));
   const durationMs = Date.now() - startTime;
@@ -544,12 +744,12 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
     status: 'completed',
     summary: {
       violationsCount: violations.reduce((acc, v) => acc + v.nodes.length, 0),
-      passesCount,
+      passesCount: passes.length,
       byImpact,
       byWcag,
     },
     violations,
+    passes,
     durationMs,
   };
 }
-
