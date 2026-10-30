@@ -300,21 +300,22 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
     addPass('button-name', 'A', 'All buttons have discernible text or accessible labels');
   }
 
-  // 6. Landmarks: Main Region (WCAG 1.3.1 - Level A)
+  // 6. Landmarks: Main Region (WCAG 1.3.1 / 2.4.1 - Level AA)
+  // Landmarks are a Level AA requirement for bypass blocks and structural navigation order
   const hasMainLandmark = elements.some((e) => e.tagName === 'main' || e.attrs.role === 'main');
   if (!hasMainLandmark) {
     addViolation({
       ruleId: 'landmark-one-main',
       impact: 'moderate',
-      wcagLevel: 'A',
-      wcagTags: ['wcag2a', 'wcag131'],
+      wcagLevel: 'AA',
+      wcagTags: ['wcag2aa', 'wcag131', 'wcag241'],
       description: 'Document should have a <main> landmark indicating primary content.',
       help: 'Wrap your central page content in a <main> HTML element.',
       helpUrl: 'https://www.w3.org/WAI/WCAG21/Understanding/info-and-relationships.html',
       nodes: [{ html: '<body>', target: ['body'], failureSummary: 'No <main> landmark detected' }],
     });
   } else {
-    addPass('landmark-one-main', 'A', 'Page contains a primary <main> content landmark');
+    addPass('landmark-one-main', 'AA', 'Page contains a primary <main> content landmark');
   }
 
   // 7. Avoid Positive Tabindex (WCAG 2.4.3 - Level A)
@@ -733,7 +734,7 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
   });
 
   // Weighted Compliance Score (0 to 100) strictly relative to the target level
-  const penalty = byImpact.critical * 12 + byImpact.serious * 6 + byImpact.moderate * 2 + byImpact.minor * 1;
+  const penalty = byImpact.critical * 20 + byImpact.serious * 12 + byImpact.moderate * 6 + byImpact.minor * 3;
   const score = Math.max(0, Math.min(100, Math.round(100 - penalty)));
   const durationMs = Date.now() - startTime;
 
