@@ -17,11 +17,11 @@ export default function ErrorsTable({ id, range }) {
         {errors.map((e) => (
           <li key={e.message}>
             <details className="group py-3">
-              <summary className="grid cursor-pointer list-none grid-cols-[1fr_auto] gap-x-4 gap-y-1 marker:hidden">
-                <span className="break-words font-medium">{e.message}</span>
-                <span className="text-right num">{e.count.toLocaleString()} {e.count === 1 ? 'time' : 'times'}</span>
-                <span className="text-sm text-muted">On {e.path}. Last seen {ago(e.lastSeen)}.</span>
-                <span className="text-right text-sm text-muted num">{e.sessions.toLocaleString()} {e.sessions === 1 ? 'visitor' : 'visitors'}</span>
+              <summary className="grid cursor-pointer list-none grid-cols-[1fr_auto] gap-x-4 gap-y-1 marker:hidden min-w-0">
+                <span className="break-words font-medium min-w-0">{e.message}</span>
+                <span className="text-right num shrink-0">{e.count.toLocaleString()} {e.count === 1 ? 'time' : 'times'}</span>
+                <span className="text-sm text-muted break-all min-w-0">On {e.path}. Last seen {ago(e.lastSeen)}.</span>
+                <span className="text-right text-sm text-muted num shrink-0">{e.sessions.toLocaleString()} {e.sessions === 1 ? 'visitor' : 'visitors'}</span>
               </summary>
               <pre className="mt-3 overflow-x-auto rounded border border-rule bg-panel p-3 text-xs leading-relaxed">{e.stack || 'No stack trace was captured.'}</pre>
             </details>

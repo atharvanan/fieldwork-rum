@@ -27,7 +27,7 @@ export default function Gauge({ name, p75, samples, distribution }) {
         <div className="flex flex-wrap items-baseline gap-x-3">
           <span className="font-display text-3xl num">{fmt(name, p75)}</span>
           {rating && <span className={`text-sm font-medium ${RATING_TEXT[rating]}`}>{RATING_LABEL[rating]}</span>}
-          {samples ? <span className="ml-auto text-sm text-muted num">3 in 4 visits are faster, from {samples.toLocaleString()} samples</span> : null}
+          {samples ? <span className="text-sm text-muted num sm:ml-auto">3 in 4 visits are faster, from {samples.toLocaleString()} samples</span> : null}
         </div>
 
         <div

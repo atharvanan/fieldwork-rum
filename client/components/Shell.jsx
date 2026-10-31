@@ -30,14 +30,14 @@ export default function Shell({ children }) {
 
   return (
     <>
-      <header className="border-b border-rule">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-3">
-          <Link href="/dashboard" className="font-display text-xl">
+      <header className="border-b border-rule overflow-x-hidden">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-5 py-3 min-w-0">
+          <Link href="/dashboard" className="font-display text-xl shrink-0">
             Fieldwork
           </Link>
-          <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-3 text-sm min-w-0">
             {data?.user && (
-              <span className="text-muted">
+              <span className="text-muted truncate max-w-[130px] sm:max-w-none">
                 {data.user.name}
                 {data.user.role === 'admin' ? ' (admin)' : ''}
               </span>
@@ -46,7 +46,7 @@ export default function Shell({ children }) {
               type="button"
               disabled={isSigningOut}
               onClick={signOut}
-              className="flex items-center gap-2 underline underline-offset-4 hover:text-accent disabled:opacity-60 transition-opacity"
+              className="flex shrink-0 items-center gap-2 underline underline-offset-4 hover:text-accent disabled:opacity-60 transition-opacity"
             >
               {isSigningOut ? (
                 <>
