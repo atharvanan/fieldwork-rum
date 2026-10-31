@@ -129,7 +129,7 @@ Built as a decoupled, multi-tiered architecture featuring a dependency-free brow
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/fieldwork-rum.git
+git clone https://github.com/atharvanan/fieldwork-rum.git
 cd fieldwork-rum
 
 # Spin up MongoDB, API Server, and Dashboard
