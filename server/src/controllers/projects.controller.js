@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Project } from '../models/Project.js';
 import { Event } from '../models/Event.js';
 import { Alert } from '../models/Alert.js';
+import { Audit } from '../models/Audit.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { invalidateKey } from '../services/projectCache.js';
 
@@ -52,6 +53,7 @@ export const remove = asyncHandler(async (req, res) => {
   await Promise.all([
     Event.deleteMany({ project: req.project._id }),
     Alert.deleteMany({ project: req.project._id }),
+    Audit.deleteMany({ project: req.project._id }),
     req.project.deleteOne(),
   ]);
   res.status(204).end();

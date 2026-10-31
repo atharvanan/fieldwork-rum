@@ -1,9 +1,18 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../middleware/auth.js';
 import { loadProject } from '../middleware/project.js';
 import * as p from '../controllers/projects.controller.js';
 import * as s from '../controllers/stats.controller.js';
 import * as a from '../controllers/audit.controller.js';
+
+const auditLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many audit requests. Please wait a minute before running another audit.' },
+});
 
 const router = Router();
 router.use(requireAuth);
@@ -23,7 +32,7 @@ router.get('/:id/stats/breakdown', s.breakdown);
 router.get('/:id/stats/errors', s.errors);
 
 // WCAG Accessibility Audit Endpoints
-router.post('/:id/audits', a.runAudit);
+router.post('/:id/audits', auditLimiter, a.runAudit);
 router.get('/:id/audits', a.listAudits);
 router.get('/:id/audits/:auditId', a.getAudit);
 router.delete('/:id/audits/:auditId', a.deleteAudit);

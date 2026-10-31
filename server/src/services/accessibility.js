@@ -1,12 +1,3 @@
-/**
- * WCAG 2.1 / 2.2 Accessibility Evaluation Engine
- * Performs comprehensive structural, semantic, landmark, form control, contrast, and navigation assessment.
- * Implements strict legal conformance separation according to W3C specifications:
- * - Level A: Minimum baseline technical accessibility (25 W3C criteria)
- * - Level AA: Global legal compliance standard (ADA, Section 508, EN 301 549, EAA)
- * - Level AAA: Enhanced specialist accessibility
- */
-
 const LEVEL_RANK = { A: 1, AA: 2, AAA: 3 };
 
 function isLevelIncluded(ruleLevel, targetLevel) {
@@ -89,9 +80,6 @@ function parseHtml(html) {
   return { html, elements };
 }
 
-/**
- * Computes a weighted penalty score from a set of violations.
- */
 function calculateScore(violationsList) {
   const penalties = { critical: 20, serious: 12, moderate: 6, minor: 3 };
   let penalty = 0;
@@ -102,13 +90,6 @@ function calculateScore(violationsList) {
   return Math.max(0, Math.min(100, Math.round(100 - penalty)));
 }
 
-/**
- * Executes a full WCAG compliance assessment on an HTML document.
- * Strictly differentiates between Conformance Levels A, AA, and AAA:
- * - Level A evaluates ONLY Level A requirements.
- * - Level AA evaluates Level A + Level AA requirements (Legal Compliance Standard).
- * - Level AAA evaluates Level A + Level AA + Level AAA requirements.
- */
 export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
   const startTime = Date.now();
   let html = htmlContent;
@@ -120,7 +101,7 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
       const response = await fetch(url, {
         signal: controller.signal,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) FieldworkAccessibilityScanner/1.0',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Fieldwork/1.0',
           Accept: 'text/html,application/xhtml+xml',
         },
       });
@@ -128,6 +109,10 @@ export async function auditPage(url, { targetLevel = 'AA', htmlContent } = {}) {
         throw new Error(`Failed to fetch page: HTTP ${response.status} ${response.statusText}`);
       }
       html = await response.text();
+      // Cap HTML payload size to 5MB to prevent memory exhaustion on malicious/oversized documents
+      if (html && html.length > 5 * 1024 * 1024) {
+        html = html.slice(0, 5 * 1024 * 1024);
+      }
     } finally {
       clearTimeout(timeout);
     }

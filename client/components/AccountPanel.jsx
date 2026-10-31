@@ -45,7 +45,7 @@ export default function AccountPanel() {
           <button
             type="button"
             onClick={() => setConfirming(true)}
-            className="mt-4 rounded border border-poor/60 bg-panel px-4 py-2 text-xs font-semibold text-poor hover:bg-poor hover:text-white transition-colors"
+            className="btn-danger mt-4 text-xs"
           >
             Delete Account and All Data
           </button>
@@ -73,7 +73,7 @@ export default function AccountPanel() {
                 type="button"
                 disabled={confirmText !== 'DELETE' || deleteMutation.isPending}
                 onClick={() => deleteMutation.mutate()}
-                className="rounded bg-poor px-4 py-2 text-xs font-semibold text-white hover:bg-poor/90 disabled:opacity-50 transition-opacity"
+                className="btn border-poor bg-poor text-paper hover:bg-poor/90 text-xs font-semibold"
               >
                 {deleteMutation.isPending ? 'Purging all data...' : 'Permanently Delete Everything'}
               </button>
@@ -83,7 +83,7 @@ export default function AccountPanel() {
                   setConfirming(false);
                   setConfirmText('');
                 }}
-                className="rounded border border-rule bg-panel px-3 py-2 text-xs text-muted hover:text-ink"
+                className="btn-quiet text-xs"
               >
                 Cancel
               </button>

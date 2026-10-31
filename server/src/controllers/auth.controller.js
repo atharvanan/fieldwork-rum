@@ -140,9 +140,6 @@ function verifyOAuthState(stateStr) {
   return sig === expectedSig;
 }
 
-/**
- * Initiates the Google OAuth 2.0 authorization code flow.
- */
 export const googleAuth = (req, res) => {
   if (!env.googleClientId || !env.googleClientSecret) {
     return res.redirect(`${env.clientOrigin}/login?error=Google+OAuth+not+configured`);
@@ -192,11 +189,6 @@ async function resilientFetch(url, options = {}, retries = 3) {
   throw lastErr;
 }
 
-/**
- * Google OAuth 2.0 callback handler.
- * Exchanges authorization code for tokens, retrieves user profile, links or provisions
- * user record, establishes session cookies, and redirects to dashboard.
- */
 export const googleCallback = asyncHandler(async (req, res) => {
   try {
     const { code, state, error } = req.query;
@@ -323,18 +315,12 @@ export const googleCallback = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * Permanently deletes the authenticated user's account and performs a cascading purge
- * of all associated projects, telemetry events, alerts, audits, and session tokens.
- */
 export const deleteAccount = asyncHandler(async (req, res) => {
   const userId = req.user.id;
 
-  // 1. Identify all projects owned by the user
   const projects = await Project.find({ owner: userId }).select('_id key').lean();
   const projectIds = projects.map((p) => p._id);
 
-  // 2. Cascade delete all telemetry data across user projects
   if (projectIds.length > 0) {
     await Promise.all([
       Event.deleteMany({ project: { $in: projectIds } }),
@@ -343,19 +329,13 @@ export const deleteAccount = asyncHandler(async (req, res) => {
       Project.deleteMany({ _id: { $in: projectIds } }),
     ]);
 
-    // Invalidate LRU cache entries for project keys
     for (const p of projects) {
       if (p.key) invalidateKey(p.key);
     }
   }
 
-  // 3. Purge all refresh tokens / session families for the user
   await RefreshToken.deleteMany({ user: userId });
-
-  // 4. Delete the User record
   await User.findByIdAndDelete(userId);
-
-  // 5. Invalidate HTTP session cookies
   clearAuthCookies(res);
 
   res.status(204).end();
