@@ -66,8 +66,8 @@ export default function SitePage({ params }) {
           <Tabs
             label="Dashboard view"
             options={[
-              { value: 'performance', label: 'Performance & Vitals' },
-              { value: 'accessibility', label: 'WCAG Accessibility' },
+              { value: 'performance', label: 'Performance' },
+              { value: 'accessibility', label: 'Accessibility' },
             ]}
             value={view}
             onChange={setView}
