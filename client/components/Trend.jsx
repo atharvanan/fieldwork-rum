@@ -14,7 +14,7 @@ export default function Trend({ id, range, metric }) {
     <section aria-labelledby="trend-h">
       <h2 id="trend-h" className="text-2xl">{VITALS[metric].title} over time</h2>
       <p className="text-sm text-muted">75th percentile per time bucket. The dashed lines mark the Good and Poor limits.</p>
-      <div className="mt-4 h-[260px]">
+      <div className="mt-4 h-[260px] min-w-0 w-full overflow-hidden">
         {isLoading && <p className="text-muted">Loading chart</p>}
         {error && <p role="alert" className="text-poor">{error.message}</p>}
         {!isLoading && !error && points.length === 0 && <p className="text-muted">No {metric} readings in this range.</p>}

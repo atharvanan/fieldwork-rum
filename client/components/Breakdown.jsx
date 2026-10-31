@@ -25,7 +25,7 @@ export default function Breakdown({ id, range, metric }) {
           <h2 id="where-h" className="text-2xl">Where {VITALS[metric].title.toLowerCase()} is slowest</h2>
           <p className="text-sm text-muted">Compare groups to find the release, browser or page that is dragging the number up.</p>
         </div>
-        <Tabs label="Group by" options={GROUPS} value={by} onChange={setBy} />
+        <div className="max-w-full overflow-x-auto"><Tabs label="Group by" options={GROUPS} value={by} onChange={setBy} /></div>
       </div>
       {isLoading && <p className="mt-4 text-muted">Loading</p>}
       {error && <p role="alert" className="mt-4 text-poor">{error.message}</p>}

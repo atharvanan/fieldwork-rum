@@ -63,7 +63,7 @@ export default function Shell({ children }) {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-5 py-8">{children}</main>
+      <main className="mx-auto max-w-5xl px-5 py-8 min-w-0 overflow-x-hidden">{children}</main>
     </>
   );
 }
