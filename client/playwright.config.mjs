@@ -6,7 +6,7 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 60_000,
   workers: 1, // they share one database
-  reporter: [['list']],
+  reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:3000',
     launchOptions: process.env.CHROMIUM_PATH
