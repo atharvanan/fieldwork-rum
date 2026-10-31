@@ -3,20 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "description": "Lightweight Real User Monitoring (RUM) platform for Core Web Vitals, runtime errors, and route telemetry",
-  "workspaces": [
-    "server",
-    "client",
-    "sdk"
-  ],
   "scripts": {
-    "build:sdk": "npm run build --workspace=sdk",
-    "build:client": "npm run build --workspace=client",
+    "build:sdk": "npm run build --prefix sdk",
+    "build:client": "npm run build --prefix client",
     "build": "npm run build:sdk && npm run build:client",
-    "test:server": "npm run test --workspace=server",
-    "test:sdk": "npm run test --workspace=sdk",
+    "test:server": "npm run test --prefix server",
+    "test:sdk": "npm run test --prefix sdk",
     "test": "npm run test:server && npm run test:sdk",
-    "test:e2e": "npm run test:e2e --workspace=server",
-    "seed": "npm run seed --workspace=server"
+    "test:e2e": "npm run test:e2e --prefix server",
+    "seed": "npm run seed --prefix server"
   }
 }
-
