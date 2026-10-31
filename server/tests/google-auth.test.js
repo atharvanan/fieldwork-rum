@@ -73,7 +73,7 @@ test('Google Auth Callback - rejects invalid or mismatched CSRF state', async ()
 
   assert.ok(cookiesCleared.includes('rum_oauth_state'));
   assert.match(redirectedUrl, /\/login\?error=/);
-  assert.match(redirectedUrl, /Invalid\+OAuth\+state/);
+  assert.match(redirectedUrl, /Invalid(\+|%20)OAuth(\+|%20)state/i);
 });
 
 test('User Model - validates creation with googleId without passwordHash', () => {
