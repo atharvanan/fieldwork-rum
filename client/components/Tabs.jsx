@@ -11,7 +11,14 @@ export default function Tabs({ options, value, onChange, label }) {
           onClick={() => onChange(o.value)}
           className={`border-l border-rule px-3 py-1.5 text-sm first:border-l-0 ${o.value === value ? 'bg-ink text-paper' : 'bg-transparent text-ink hover:bg-panel'}`}
         >
-          {o.label}
+          {o.fullLabel ? (
+            <>
+              <span className="sm:hidden">{o.label}</span>
+              <span className="hidden sm:inline">{o.fullLabel}</span>
+            </>
+          ) : (
+            o.label
+          )}
         </button>
       ))}
     </div>

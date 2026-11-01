@@ -16,10 +16,10 @@ import { ORDER } from '@/lib/vitals';
 import { ago } from '@/lib/format';
 
 const RANGES = [
-  { value: '1h', label: '1 hour' },
-  { value: '24h', label: '24 hours' },
-  { value: '7d', label: '7 days' },
-  { value: '30d', label: '30 days' },
+  { value: '1h', label: '1h', fullLabel: '1 hour' },
+  { value: '24h', label: '24h', fullLabel: '24 hours' },
+  { value: '7d', label: '7d', fullLabel: '7 days' },
+  { value: '30d', label: '30d', fullLabel: '30 days' },
 ];
 
 export default function SitePage({ params }) {

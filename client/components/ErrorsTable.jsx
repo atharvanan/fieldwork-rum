@@ -23,7 +23,7 @@ export default function ErrorsTable({ id, range }) {
                 <span className="text-sm text-muted break-all min-w-0">On {e.path}. Last seen {ago(e.lastSeen)}.</span>
                 <span className="text-right text-sm text-muted num shrink-0">{e.sessions.toLocaleString()} {e.sessions === 1 ? 'visitor' : 'visitors'}</span>
               </summary>
-              <pre className="mt-3 overflow-x-auto rounded border border-rule bg-panel p-3 text-xs leading-relaxed">{e.stack || 'No stack trace was captured.'}</pre>
+              <pre className="mt-3 max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded border border-rule bg-panel p-3 text-xs leading-relaxed">{e.stack || 'No stack trace was captured.'}</pre>
             </details>
           </li>
         ))}

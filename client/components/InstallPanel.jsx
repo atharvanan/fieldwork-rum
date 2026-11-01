@@ -29,7 +29,7 @@ export default function InstallPanel({ project }) {
     <section aria-labelledby="install-h">
       <h2 id="install-h" className="text-2xl">Install and settings</h2>
       <p className="mt-1 text-sm text-muted">Paste this into the &lt;head&gt; of every page you want to measure. Change data-release whenever you ship, so you can compare versions.</p>
-      <pre className="mt-3 overflow-x-auto rounded border border-rule bg-panel p-3 text-sm">{snippet}</pre>
+      <pre className="mt-3 max-w-full overflow-x-auto whitespace-pre-wrap break-all rounded border border-rule bg-panel p-3 text-sm">{snippet}</pre>
       <div className="mt-2 flex flex-wrap gap-3">
         <button
           type="button"

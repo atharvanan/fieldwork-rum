@@ -259,7 +259,7 @@ test.describe('responsive layout', () => {
     await page.setViewportSize({ width: 375, height: 800 });
     for (const path of ['/', '/login', '/register']) {
       await page.goto(path);
-      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      const overflow = await page.evaluate(() => Math.round(document.documentElement.scrollWidth - window.innerWidth));
       expect(overflow, path).toBeLessThanOrEqual(0);
     }
     await page.goto('/login');
@@ -269,7 +269,7 @@ test.describe('responsive layout', () => {
     await page.getByRole('link', { name: /Demo Store/ }).click();
     await expect(page.getByRole('heading', { name: 'Core measurements' })).toBeVisible();
     await page.waitForTimeout(800);
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    const overflow = await page.evaluate(() => Math.round(document.documentElement.scrollWidth - window.innerWidth));
     expect(overflow).toBeLessThanOrEqual(0);
   });
 });
