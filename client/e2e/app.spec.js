@@ -94,7 +94,7 @@ test.describe('accounts', () => {
     await context.clearCookies({ name: 'rum_access' });
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Your sites' })).toBeVisible();
-    await expect(page.getByText('Renewal Person')).toBeVisible();
+    await expect(page.getByText('Renewal Person', { exact: true })).toBeVisible();
   });
 
   test('when the whole session is gone, the user lands on the login page without a redirect loop', async ({ page, context }) => {
