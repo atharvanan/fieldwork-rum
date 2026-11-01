@@ -22,7 +22,5 @@ export const env = {
   retentionDays: Number(process.env.RETENTION_DAYS) || 30,
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-  googleCallbackUrl:
-    process.env.GOOGLE_CALLBACK_URL ||
-    `${(process.env.CLIENT_ORIGIN || 'http://localhost:3000').replace(/\/+$/, '')}/api/auth/google/callback`,
+  googleCallbackUrl: `${(process.env.CLIENT_ORIGIN || 'http://localhost:3000').replace(/\/+$/, '')}/api/auth/google/callback`,
 };
