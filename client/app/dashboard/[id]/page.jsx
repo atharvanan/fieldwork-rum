@@ -10,6 +10,7 @@ import Breakdown from '@/components/Breakdown';
 import ErrorsTable from '@/components/ErrorsTable';
 import InstallPanel from '@/components/InstallPanel';
 import AccessibilityPanel from '@/components/AccessibilityPanel';
+import PerfAuditPanel from '@/components/PerfAuditPanel';
 import { api } from '@/lib/api';
 import { useStat } from '@/lib/hooks';
 import { ORDER } from '@/lib/vitals';
@@ -66,7 +67,8 @@ export default function SitePage({ params }) {
           <Tabs
             label="Dashboard view"
             options={[
-              { value: 'performance', label: 'Performance' },
+              { value: 'performance', label: 'Real User (RUM)' },
+              { value: 'lab-audit', label: 'URL Audit' },
               { value: 'accessibility', label: 'Accessibility' },
             ]}
             value={view}
@@ -78,7 +80,11 @@ export default function SitePage({ params }) {
         </div>
       </div>
 
-      {view === 'accessibility' ? (
+      {view === 'lab-audit' ? (
+        <div className="mt-8 space-y-12">
+          <PerfAuditPanel project={p} />
+        </div>
+      ) : view === 'accessibility' ? (
         <div className="mt-8 space-y-12">
           <AccessibilityPanel project={p} />
           <InstallPanel key={p.key} project={p} />

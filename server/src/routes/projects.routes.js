@@ -5,6 +5,7 @@ import { loadProject } from '../middleware/project.js';
 import * as p from '../controllers/projects.controller.js';
 import * as s from '../controllers/stats.controller.js';
 import * as a from '../controllers/audit.controller.js';
+import * as pa from '../controllers/perfAudit.controller.js';
 
 const auditLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -36,5 +37,11 @@ router.post('/:id/audits', auditLimiter, a.runAudit);
 router.get('/:id/audits', a.listAudits);
 router.get('/:id/audits/:auditId', a.getAudit);
 router.delete('/:id/audits/:auditId', a.deleteAudit);
+
+// Lab Performance Audit Endpoints (URL-based, no snippet needed)
+router.post('/:id/perf-audits', auditLimiter, pa.runPerfAudit);
+router.get('/:id/perf-audits', pa.listPerfAudits);
+router.get('/:id/perf-audits/:auditId', pa.getPerfAudit);
+router.delete('/:id/perf-audits/:auditId', pa.deletePerfAudit);
 
 export default router;
