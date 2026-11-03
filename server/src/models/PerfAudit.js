@@ -1,5 +1,14 @@
 import mongoose from 'mongoose';
 
+const itemSchema = new mongoose.Schema(
+  {
+    url: { type: String },
+    snippet: { type: String },
+    detail: { type: String },
+  },
+  { _id: false }
+);
+
 const opportunitySchema = new mongoose.Schema(
   {
     id: { type: String, required: true },
@@ -7,6 +16,8 @@ const opportunitySchema = new mongoose.Schema(
     impact: { type: String, enum: ['critical', 'serious', 'moderate', 'minor'], required: true },
     savings: { type: String },
     description: { type: String, required: true },
+    fixGuidance: { type: String },
+    items: { type: [itemSchema], default: [] },
   },
   { _id: false }
 );
@@ -55,3 +66,4 @@ const perfAuditSchema = new mongoose.Schema(
 perfAuditSchema.index({ project: 1, createdAt: -1 });
 
 export const PerfAudit = mongoose.model('PerfAudit', perfAuditSchema);
+
