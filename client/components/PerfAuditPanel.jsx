@@ -50,6 +50,23 @@ export default function PerfAuditPanel({ project }) {
   const [strategy, setStrategy] = useState('mobile');
   const [selectedAuditId, setSelectedAuditId] = useState(null);
   const [impactFilter, setImpactFilter] = useState('all');
+  const [expandedOpps, setExpandedOpps] = useState({});
+  const [copiedId, setCopiedId] = useState(null);
+
+  const toggleOpp = (id) => {
+    setExpandedOpps((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
+  const copyToClipboard = (text, id) => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+    }
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   // Fetch past performance audits
   const auditsQuery = useQuery({
@@ -114,6 +131,41 @@ export default function PerfAuditPanel({ project }) {
   const filteredOpportunities = (currentAudit?.opportunities || []).filter((o) => {
     return impactFilter === 'all' || o.impact === impactFilter;
   });
+
+  const copyFullReport = () => {
+    if (!currentAudit) return;
+    const lines = [
+      `# Performance Audit Diagnostic Report for ${currentAudit.url}`,
+      `Score: ${currentAudit.score}/100 | Strategy: ${currentAudit.strategy} | Status: HTTP ${currentAudit.statusCode || 200}`,
+      '',
+      '## Core Web Vitals (Simulated Lab)',
+      `- LCP: ${currentAudit.vitals?.LCP?.display || 'N/A'} (${currentAudit.vitals?.LCP?.rating || ''})`,
+      `- FCP: ${currentAudit.vitals?.FCP?.display || 'N/A'} (${currentAudit.vitals?.FCP?.rating || ''})`,
+      `- CLS: ${currentAudit.vitals?.CLS?.display || 'N/A'} (${currentAudit.vitals?.CLS?.rating || ''})`,
+      `- TBT: ${currentAudit.vitals?.TBT?.display || 'N/A'} (${currentAudit.vitals?.TBT?.rating || ''})`,
+      `- TTFB: ${currentAudit.vitals?.TTFB?.display || 'N/A'} (${currentAudit.vitals?.TTFB?.rating || ''})`,
+      `- Speed Index: ${currentAudit.vitals?.SpeedIndex?.display || 'N/A'} (${currentAudit.vitals?.SpeedIndex?.rating || ''})`,
+      '',
+      '## Optimization Opportunities & Problem Culprits',
+    ];
+
+    (currentAudit.opportunities || []).forEach((opp, i) => {
+      lines.push(`\n### ${i + 1}. [${opp.impact.toUpperCase()}] ${opp.title}`);
+      if (opp.savings) lines.push(`Estimated Savings: ${opp.savings}`);
+      lines.push(`Summary: ${opp.description}`);
+      if (opp.fixGuidance) lines.push(`Remediation Fix: ${opp.fixGuidance}`);
+      if (opp.items?.length > 0) {
+        lines.push('Problem Culprit Assets:');
+        opp.items.forEach((item, itemIdx) => {
+          lines.push(`  - Item ${itemIdx + 1}: ${item.url || 'HTML Element'}`);
+          if (item.detail) lines.push(`    Issue: ${item.detail}`);
+          if (item.snippet) lines.push(`    Snippet: ${item.snippet}`);
+        });
+      }
+    });
+
+    copyToClipboard(lines.join('\n'), 'full-report');
+  };
 
   return (
     <div className="space-y-6">
@@ -403,26 +455,39 @@ export default function PerfAuditPanel({ project }) {
               <div>
                 <h3 className="text-lg font-medium text-ink">Optimization Opportunities & Diagnostics</h3>
                 <p className="text-xs text-muted">
-                  Specific remediation steps that will directly improve your site speed and performance score.
+                  Specific remediation steps with exact problem asset URLs, HTML snippets, and code fixes.
                 </p>
               </div>
 
-              {/* Impact filter tabs */}
-              <div className="flex items-center gap-1 text-xs">
-                {['all', 'critical', 'serious', 'moderate', 'minor'].map((lvl) => (
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Impact filter tabs */}
+                <div className="flex items-center gap-1 text-xs">
+                  {['all', 'critical', 'serious', 'moderate', 'minor'].map((lvl) => (
+                    <button
+                      key={lvl}
+                      type="button"
+                      onClick={() => setImpactFilter(lvl)}
+                      className={`rounded border px-2.5 py-1 text-xs capitalize transition-colors ${
+                        impactFilter === lvl
+                          ? 'border-ink bg-ink text-paper'
+                          : 'border-rule bg-paper text-ink hover:bg-panel'
+                      }`}
+                    >
+                      {lvl}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Copy Full Report */}
+                {filteredOpportunities.length > 0 && (
                   <button
-                    key={lvl}
                     type="button"
-                    onClick={() => setImpactFilter(lvl)}
-                    className={`rounded border px-2.5 py-1 text-xs capitalize transition-colors ${
-                      impactFilter === lvl
-                        ? 'border-ink bg-ink text-paper'
-                        : 'border-rule bg-paper text-ink hover:bg-panel'
-                    }`}
+                    onClick={copyFullReport}
+                    className="rounded border border-rule bg-paper px-2.5 py-1 text-xs text-ink hover:bg-panel hover:border-ink transition-colors flex items-center gap-1.5 font-medium"
                   >
-                    {lvl}
+                    <span>{copiedId === 'full-report' ? 'Report Copied!' : 'Copy Diagnostics Report'}</span>
                   </button>
-                ))}
+                )}
               </div>
             </div>
 
@@ -433,23 +498,183 @@ export default function PerfAuditPanel({ project }) {
             ) : (
               <div className="mt-4 space-y-3">
                 {filteredOpportunities.map((opp, idx) => {
+                  const oppKey = opp.id || `opp-${idx}`;
+                  const isExpanded = expandedOpps[oppKey] ?? (idx === 0 || opp.impact === 'critical' || opp.impact === 'serious');
                   const style = IMPACT_STYLES[opp.impact] || IMPACT_STYLES.minor;
+                  const itemsCount = opp.items?.length || 0;
+
                   return (
-                    <div key={opp.id || idx} className="rounded border border-rule bg-paper p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className={`rounded border px-2 py-0.5 text-[10px] font-semibold ${style.badge}`}>
+                    <div
+                      key={oppKey}
+                      className="rounded border border-rule bg-paper overflow-hidden transition-all shadow-sm"
+                    >
+                      {/* Interactive Header Bar */}
+                      <div
+                        className="flex flex-wrap items-center justify-between gap-3 p-4 cursor-pointer select-none hover:bg-panel/40 transition-colors"
+                        onClick={() => toggleOpp(oppKey)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            toggleOpp(oppKey);
+                          }
+                        }}
+                        aria-expanded={isExpanded}
+                      >
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <span className={`rounded border px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase ${style.badge}`}>
                             {style.label}
                           </span>
                           <h4 className="text-sm font-semibold text-ink">{opp.title}</h4>
+                          {itemsCount > 0 && (
+                            <span className="rounded-full bg-panel border border-rule px-2 py-0.5 text-[10px] text-muted font-mono font-medium">
+                              {itemsCount} {itemsCount === 1 ? 'culprit item' : 'culprit items'}
+                            </span>
+                          )}
                         </div>
-                        {opp.savings && (
-                          <span className="rounded bg-panel px-2 py-0.5 text-xs font-mono font-medium text-ink border border-rule">
-                            Savings: {opp.savings}
-                          </span>
-                        )}
+
+                        <div className="flex items-center gap-3">
+                          {opp.savings && (
+                            <span className="rounded bg-panel px-2 py-0.5 text-xs font-mono font-medium text-ink border border-rule">
+                              Savings: {opp.savings}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            className="flex items-center gap-1.5 text-xs text-muted hover:text-ink transition-colors font-medium"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleOpp(oppKey);
+                            }}
+                          >
+                            <span>{isExpanded ? 'Hide Details' : 'View Culprits & Fix'}</span>
+                            <span className={`text-[10px] transition-transform duration-200 inline-block ${isExpanded ? 'rotate-180' : ''}`}>
+                              ▼
+                            </span>
+                          </button>
+                        </div>
                       </div>
-                      <p className="mt-2 text-xs text-muted leading-relaxed">{opp.description}</p>
+
+                      {/* Brief Issue Summary */}
+                      <div className="px-4 pb-3">
+                        <p className="text-xs text-muted leading-relaxed">{opp.description}</p>
+                      </div>
+
+                      {/* Expandable Diagnostic Details Drawer */}
+                      {isExpanded && (
+                        <div className="border-t border-rule bg-panel/40 p-4 space-y-4">
+                          {/* Developer Remediation & Code Fix */}
+                          <div className="rounded border border-accent/30 bg-accent/5 p-3.5 space-y-1.5">
+                            <span className="text-xs font-bold text-accent uppercase tracking-wider block">
+                              Remediation Guidance & Technical Fix
+                            </span>
+                            <p className="text-xs text-ink leading-relaxed">
+                              {opp.fixGuidance || 'Inspect the specific items below and adjust resource loading to eliminate main-thread bottlenecks.'}
+                            </p>
+                          </div>
+
+                          {/* Problem Elements & Culprit Assets */}
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-xs font-semibold uppercase tracking-wider text-muted">
+                                Identified Problem Assets & Code Locations ({itemsCount})
+                              </span>
+                              {itemsCount > 0 && (
+                                <span className="text-[11px] text-muted">
+                                  Showing top {Math.min(itemsCount, 25)} culprits
+                                </span>
+                              )}
+                            </div>
+
+                            {itemsCount === 0 ? (
+                              <div className="rounded border border-rule bg-paper p-3 text-xs text-muted text-center">
+                                No asset-level culprits cached for this audit run. Run a fresh audit above to inspect exact asset URLs and code snippets.
+                              </div>
+                            ) : (
+                              <div className="space-y-2.5">
+                                {opp.items.map((item, itemIdx) => {
+                                  const copyKey = `item-${oppKey}-${itemIdx}`;
+                                  const isCopied = copiedId === copyKey;
+                                  const itemUrl = item.url || '';
+                                  const isExternal = itemUrl.startsWith('http://') || itemUrl.startsWith('https://');
+
+                                  return (
+                                    <div
+                                      key={itemIdx}
+                                      className="rounded border border-rule bg-paper p-3 text-xs space-y-2 hover:border-ink/30 transition-colors"
+                                    >
+                                      <div className="flex flex-wrap items-start justify-between gap-2">
+                                        <div className="flex-1 min-w-[240px]">
+                                          {itemUrl ? (
+                                            <div className="flex items-center gap-2">
+                                              {isExternal ? (
+                                                <a
+                                                  href={itemUrl}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                  className="font-mono text-xs font-medium text-accent hover:underline break-all"
+                                                  title={itemUrl}
+                                                >
+                                                  {itemUrl}
+                                                </a>
+                                              ) : (
+                                                <span className="font-mono text-xs font-medium text-ink break-all">
+                                                  {itemUrl}
+                                                </span>
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <span className="font-mono text-xs font-semibold text-ink">
+                                              HTML Element
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          {itemUrl && (
+                                            <button
+                                              type="button"
+                                              onClick={() => copyToClipboard(itemUrl, copyKey)}
+                                              className="rounded border border-rule bg-panel px-2 py-0.5 text-[11px] text-muted hover:text-ink hover:border-ink transition-colors"
+                                            >
+                                              {isCopied ? 'Copied URL!' : 'Copy URL'}
+                                            </button>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Technical Diagnosis */}
+                                      {item.detail && (
+                                        <div className="flex items-center gap-1.5 text-xs text-warn font-medium">
+                                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-warn shrink-0" />
+                                          <span>{item.detail}</span>
+                                        </div>
+                                      )}
+
+                                      {/* Exact HTML or Code Snippet */}
+                                      {item.snippet && (
+                                        <div className="relative group mt-1.5">
+                                          <pre className="overflow-x-auto rounded border border-rule bg-panel p-2 font-mono text-[11px] text-ink whitespace-pre-wrap break-all leading-normal select-all">
+                                            {item.snippet}
+                                          </pre>
+                                          <button
+                                            type="button"
+                                            onClick={() => copyToClipboard(item.snippet, `snip-${oppKey}-${itemIdx}`)}
+                                            className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 focus:opacity-100 rounded border border-rule bg-paper px-2 py-0.5 text-[10px] text-muted hover:text-ink hover:border-ink transition-all shadow-sm"
+                                          >
+                                            {copiedId === `snip-${oppKey}-${itemIdx}` ? 'Copied Snippet!' : 'Copy Snippet'}
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

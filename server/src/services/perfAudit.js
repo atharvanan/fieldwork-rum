@@ -39,6 +39,15 @@ function parseHtmlElements(html) {
   return elements;
 }
 
+function toAbsoluteUrl(hrefOrSrc, baseUrl) {
+  if (!hrefOrSrc) return '';
+  try {
+    return new URL(hrefOrSrc, baseUrl).href;
+  } catch {
+    return hrefOrSrc;
+  }
+}
+
 export async function runPerformanceAudit(url, { strategy = 'mobile' } = {}) {
   const startTime = Date.now();
   const isMobile = strategy === 'mobile';
@@ -191,42 +200,90 @@ export async function runPerformanceAudit(url, { strategy = 'mobile' } = {}) {
   const totalBlocking = renderBlockingStyles.length + renderBlockingScripts.length;
   if (totalBlocking > 0) {
     const savingsMs = Math.round((renderBlockingStyles.length * 120) + (renderBlockingScripts.length * 150));
+    const items = [
+      ...renderBlockingStyles.map((s) => ({
+        url: toAbsoluteUrl(s.attrs.href, url),
+        snippet: s.raw,
+        detail: 'Synchronous render-blocking CSS in <head> delaying First Contentful Paint',
+      })),
+      ...renderBlockingScripts.map((s) => ({
+        url: toAbsoluteUrl(s.attrs.src, url),
+        snippet: s.raw,
+        detail: 'Parser-blocking synchronous script lacking "defer", "async", or type="module"',
+      })),
+    ].slice(0, 25);
+
     opportunities.push({
       id: 'render-blocking-resources',
       title: 'Eliminate render-blocking resources',
       impact: totalBlocking >= 4 ? 'critical' : totalBlocking >= 2 ? 'serious' : 'moderate',
       savings: `${savingsMs} ms`,
       description: `Identified ${renderBlockingStyles.length} blocking stylesheet(s) and ${renderBlockingScripts.length} blocking script(s). Load non-critical CSS asynchronously and add defer or async to script tags.`,
+      fixGuidance: 'Add defer or async attributes to external <script> tags, or convert them to ES modules (type="module"). For stylesheets, inline critical above-the-fold CSS directly into <style> tags and load secondary CSS asynchronously with <link rel="preload" as="style" onload="this.onload=null;this.rel=\'stylesheet\'">. In Next.js, use next/script with strategy="afterInteractive" or "lazyOnload".',
+      items,
     });
   }
 
   if (imagesMissingDimensions.length > 0) {
+    const items = imagesMissingDimensions.map((img) => ({
+      url: toAbsoluteUrl(img.attrs.src, url),
+      snippet: img.raw,
+      detail: 'Missing explicit "width" and "height" HTML attributes (or CSS aspect-ratio), triggering layout shifts',
+    })).slice(0, 25);
+
     opportunities.push({
       id: 'unsized-images',
       title: 'Specify explicit width and height on image elements',
       impact: imagesMissingDimensions.length >= 5 ? 'critical' : imagesMissingDimensions.length >= 2 ? 'serious' : 'minor',
       savings: `${(imagesMissingDimensions.length * 0.035).toFixed(3)} CLS improvement`,
       description: `${imagesMissingDimensions.length} image(s) lack width/height attributes or aspect-ratio CSS. Always reserve layout space to prevent sudden layout shifts while images download.`,
+      fixGuidance: 'Always specify explicit width and height HTML attributes on every <img> tag matching the asset’s natural aspect ratio, or specify CSS aspect-ratio on the container (e.g. aspect-ratio: 16 / 9). In Next.js, use the <Image /> component with width and height or fill with a parent container having designated dimensions.',
+      items,
     });
   }
 
+  const legacyImages = images.filter((img) => {
+    const src = (img.attrs.src || '').toLowerCase();
+    if (!src) return false;
+    return !src.endsWith('.webp') && !src.endsWith('.avif') && !src.includes('format=webp') && !src.includes('format=avif') && !src.startsWith('data:');
+  });
+
   if (images.length > 2 && modernImages.length < images.length / 2) {
+    const items = legacyImages.map((img) => {
+      const ext = (img.attrs.src || '').split('?')[0].split('.').pop()?.toUpperCase() || 'IMAGE';
+      return {
+        url: toAbsoluteUrl(img.attrs.src, url),
+        snippet: img.raw,
+        detail: `Legacy ${ext} format detected. Converting to WebP or AVIF saves 30%-60% download size.`,
+      };
+    }).slice(0, 25);
+
     opportunities.push({
       id: 'modern-image-formats',
       title: 'Serve images in next-gen formats (WebP or AVIF)',
       impact: 'moderate',
       savings: 'Estimated 35% payload reduction',
       description: `Only ${modernImages.length} of ${images.length} images use modern compression formats. Switching legacy JPEG and PNG files to WebP or AVIF provides smaller files and faster downloads.`,
+      fixGuidance: 'Convert PNG and JPEG assets to WebP or AVIF using Sharp, Squoosh CLI, or ImageMagick. Deliver them using the HTML <picture> tag with fallback, or use an automated image optimization CDN or framework (e.g. Next.js <Image />, Cloudinary, Cloudflare Images).',
+      items,
     });
   }
 
   if (fontsWithoutSwap.length > 0) {
+    const items = fontsWithoutSwap.map((l) => ({
+      url: toAbsoluteUrl(l.attrs.href, url),
+      snippet: l.raw,
+      detail: 'Font stylesheet or preload lacks font-display: swap, causing invisible text (FOIT) during load',
+    })).slice(0, 25);
+
     opportunities.push({
       id: 'font-display-swap',
       title: 'Ensure text remains visible during webfont load',
       impact: 'moderate',
       savings: 'Faster text paint',
       description: `${fontsWithoutSwap.length} web font link(s) do not specify display=swap. Add &display=swap to your Google Fonts link to avoid Flash of Invisible Text (FOIT).`,
+      fixGuidance: 'Append &display=swap to your Google Fonts query URLs (e.g. https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap). For local custom fonts, include font-display: swap; in all @font-face CSS blocks. In Next.js, ensure display: "swap" is configured in next/font options.',
+      items,
     });
   }
 
@@ -237,16 +294,32 @@ export async function runPerformanceAudit(url, { strategy = 'mobile' } = {}) {
       impact: ttfb > 1500 ? 'critical' : 'serious',
       savings: `${Math.max(0, ttfb - 350)} ms`,
       description: `Root server response took ${ttfb} ms. Implement CDN edge caching, HTTP/2 or HTTP/3, and optimize database queries to reach sub-400 ms response times.`,
+      fixGuidance: 'Deploy your origin server behind an Edge CDN (Vercel Edge Network, Cloudflare, or AWS CloudFront) and send Cache-Control headers with s-maxage and stale-while-revalidate. Enable HTTP/2 or HTTP/3 protocol, optimize or index slow database queries, and consider static pre-rendering (SSG or ISR).',
+      items: [
+        {
+          url,
+          snippet: `HTTP GET ${url} -> ${ttfb} ms`,
+          detail: `Origin server response latency was ${ttfb} ms (recommended is sub-300 ms).`,
+        },
+      ],
     });
   }
 
   if (thirdPartyScripts.length >= 3) {
+    const items = thirdPartyScripts.map((s) => ({
+      url: toAbsoluteUrl(s.attrs.src, url),
+      snippet: s.raw,
+      detail: 'Third-party tracking / telemetry script executing on main thread during initial page load',
+    })).slice(0, 25);
+
     opportunities.push({
       id: 'third-party-scripts',
       title: 'Reduce third-party tracker and script execution impact',
       impact: 'minor',
       savings: `${thirdPartyScripts.length * 35} ms main-thread time`,
       description: `Found ${thirdPartyScripts.length} third-party tracking scripts. Defer tag managers and analytics until after the initial interaction using requestIdleCallback or Partytown.`,
+      fixGuidance: 'Defer third-party tracking scripts until after user interaction using requestIdleCallback or load them with Next.js <Script strategy="lazyOnload" />. Alternatively, run tag managers inside a Web Worker via Partytown so they do not block main thread UI responsiveness.',
+      items,
     });
   }
 
