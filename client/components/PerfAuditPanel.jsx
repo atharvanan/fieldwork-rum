@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { ago } from '@/lib/format';
+import { exportToPdf, exportToWord, exportToHtml } from '@/lib/exportPerfReport';
 
 const IMPACT_STYLES = {
   critical: {
@@ -52,6 +53,7 @@ export default function PerfAuditPanel({ project }) {
   const [impactFilter, setImpactFilter] = useState('all');
   const [expandedOpps, setExpandedOpps] = useState({});
   const [copiedId, setCopiedId] = useState(null);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
 
   const toggleOpp = (id) => {
     setExpandedOpps((prev) => ({
@@ -358,6 +360,66 @@ export default function PerfAuditPanel({ project }) {
                   }`}>
                     HTTP {currentAudit.statusCode || 200}
                   </span>
+
+                  {/* Download Report Dropdown */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                      className="rounded border border-ink bg-ink text-paper px-2.5 py-1 text-xs font-medium hover:bg-ink/90 transition-colors flex items-center gap-1.5 shadow-sm"
+                    >
+                      <span>Download Report</span>
+                      <span className="text-[9px]">▼</span>
+                    </button>
+
+                    {exportMenuOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setExportMenuOpen(false)}
+                        />
+                        <div className="absolute right-0 mt-1.5 w-52 rounded border border-rule bg-paper shadow-lg py-1.5 z-50 text-xs">
+                          <div className="px-3 py-1 font-semibold text-[10px] uppercase text-muted tracking-wider border-b border-rule mb-1">
+                            Export Full Audit Report
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              exportToPdf(currentAudit);
+                              setExportMenuOpen(false);
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-panel flex items-center justify-between text-ink transition-colors"
+                          >
+                            <span className="font-medium">Print / Save as PDF</span>
+                            <span className="text-[10px] text-muted font-mono bg-panel border border-rule rounded px-1.5">.pdf</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              exportToWord(currentAudit);
+                              setExportMenuOpen(false);
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-panel flex items-center justify-between text-ink transition-colors"
+                          >
+                            <span className="font-medium">Microsoft Word</span>
+                            <span className="text-[10px] text-muted font-mono bg-panel border border-rule rounded px-1.5">.doc</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              exportToHtml(currentAudit);
+                              setExportMenuOpen(false);
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-panel flex items-center justify-between text-ink transition-colors"
+                          >
+                            <span className="font-medium">Standalone HTML</span>
+                            <span className="text-[10px] text-muted font-mono bg-panel border border-rule rounded px-1.5">.html</span>
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
                   <button
                     type="button"
                     onClick={() => deleteMutation.mutate(currentAudit._id)}
@@ -478,15 +540,34 @@ export default function PerfAuditPanel({ project }) {
                   ))}
                 </div>
 
-                {/* Copy Full Report */}
+                {/* Export Report Actions */}
                 {filteredOpportunities.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={copyFullReport}
-                    className="rounded border border-rule bg-paper px-2.5 py-1 text-xs text-ink hover:bg-panel hover:border-ink transition-colors flex items-center gap-1.5 font-medium"
-                  >
-                    <span>{copiedId === 'full-report' ? 'Report Copied!' : 'Copy Diagnostics Report'}</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => exportToPdf(currentAudit)}
+                      title="Open printable report and Save as PDF"
+                      className="rounded border border-rule bg-paper px-2.5 py-1 text-xs text-ink hover:bg-panel hover:border-ink transition-colors flex items-center gap-1 font-medium"
+                    >
+                      <span>PDF Report</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => exportToWord(currentAudit)}
+                      title="Download Microsoft Word .doc Document"
+                      className="rounded border border-rule bg-paper px-2.5 py-1 text-xs text-ink hover:bg-panel hover:border-ink transition-colors flex items-center gap-1 font-medium"
+                    >
+                      <span>Word (.doc)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={copyFullReport}
+                      title="Copy full text diagnostic breakdown"
+                      className="rounded border border-rule bg-paper px-2.5 py-1 text-xs text-ink hover:bg-panel hover:border-ink transition-colors flex items-center gap-1.5 font-medium"
+                    >
+                      <span>{copiedId === 'full-report' ? 'Report Copied!' : 'Copy Text'}</span>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
